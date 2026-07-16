@@ -1,0 +1,684 @@
+================================================================================
+  AGENT TASK SYSTEM — PostgreSQL + opencode Agent Integration
+================================================================================
+
+A task-management system that stores agent configurations, permissions, and
+tasks in PostgreSQL, spawns stateless agents via an external supervisor, and
+drives those agents through opencode to process tasks autonomously.
+
+Agents are role-based (Conductor, Coder, Tester, Explorer, Reviewer). Each
+agent's identity, permissions, skills, and system prompt live in the database.
+Agent config files (.md) are rendered from the DB — the DB is the single source
+of truth.
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+  1.  Architecture Overview
+  2.  File Inventory
+  3.  Database Schema (tagg schema)
+  4.  Setup
+  5.  Operation
+  6.  Agent Lifecycle
+  7.  Tool Reference
+  8.  Extending & Customizing
+  9.  Portability Notes
+
+================================================================================
+1.  ARCHITECTURE OVERVIEW
+================================================================================
+
+                      +------------------+
+                      |   PostgreSQL DB   |
+                      |  (task_train)     |
+                      |  tagg schema      |
+                      +--------+---------+
+                               |
+                   polls every 1s for pending tasks
+                               |
+                     +---------v----------+
+                     |  db_supervisor.py   |
+                     |  (external daemon)  |
+                     +---------+----------+
+                               |
+              spawns with env vars:
+              TASK_ID, AGENT_USER_ID,
+              PGHOST, PGPORT, etc.
+                               |
+                     +---------v----------+
+                     | opencode_agent.sh   |
+                     | (entry point)       |
+                     +---------+----------+
+                               |
+                  1. syncs agent .md from DB
+                  2. claims task via claim_task()
+                  3. reads task details
+                  4. runs "opencode run --agent <name>"
+                               |
+                     +---------v----------+
+                     |  opencode LLM       |
+                     |  (reads .md config, |
+                     |   uses bash tools)  |
+                     +---------------------+
+                               |
+              calls bash tools/*.sh which
+              talk back to PostgreSQL via psql
+
+The supervisor (db_supervisor.py) runs as your OS user. It:
+  - Polls agent_task for rows with task_status_id = 1 (pending)
+  - Checks per-agent max_concurrent limits
+  - Spawns opencode_agent.sh for each task
+  - Reaps finished child processes
+  - Recovers stalled tasks (claimed >5min ago -> back to pending)
+
+The entry point (opencode_agent.sh) for each spawned agent:
+  - Syncs agent .md config from DB to filesystem
+  - Claims the task atomically (status 1 -> 3) via tagg.claim_task()
+  - Reads the task description
+  - Launches opencode run with the agent config, task context, and env vars
+
+The agent (opencode LLM session) has:
+  - Its .md config file (from DB) describing its role, tools, and workflow
+  - Environment variables: $AGENT_USER_ID, $TASK_ID, $PGHOST, etc.
+  - Bash access to 11 tool scripts in tools/ that wrap psql calls
+  - All tool scripts accept $AGENT_USER_ID and $TASK_ID as env vars
+
+================================================================================
+2.  FILE INVENTORY
+================================================================================
+
+ROOT LEVEL
+----------
+
+  setup.sh
+    Bootstrap script for first-time setup on any machine. Checks psql,
+    creates/verifies the database, runs all SQL migrations in order,
+    verifies functions and agents were created, writes supervisor config
+    if missing. Idempotent — safe to re-run.
+
+  sync_agents.sh
+    Reads every active agent from tagg.user, calls
+    tagg.render_agent_config(id) to generate .md file content, and writes
+    the result to agents/<name>.md and .opencode/agents/<name>.md.
+    Run after any change to agent prompts or permissions in the DB.
+
+DIRECTORIES
+-----------
+
+  agent-scripts/
+    opencode_agent.sh        -- Entry point spawned by the supervisor.
+                                 Syncs agent config from DB, claims task,
+                                 invokes opencode run.
+
+  agents/
+    Conductor.md             -- opencode agent config (synced from DB)
+    Coder.md                    Each file: YAML frontmatter (mode,
+    Tester.md                   tool permissions) + system prompt body.
+    Explorer.md                 Generated by sync_agents.sh. DO NOT EDIT
+    Reviewer.md                 directly — edit the DB row and re-sync.
+    Admin-Agent.md
+
+  .opencode/
+    agents/                  -- Mirror of agents/ (same files, this is
+    .gitignore                  opencode's default lookup path).
+    package.json             -- OpenCode local config artifacts (gitignored)
+    package-lock.json
+    node_modules/
+
+  sql/
+    agent_config.sql         -- Core schema: tagg.user columns (prompt,
+                                 command, max_concurrent), skill table,
+                                 skill_user_crosswalk, operation_type,
+                                 operation_log, error_log, logging funcs.
+
+    agent_config_db.sql      -- Migration: adds opencode_config JSONB column
+                                 to tagg.user, seeds configs for all agents,
+                                 creates render_agent_config() function.
+
+    permissions.sql          -- Permissions system: permission table,
+                                 skill_permission_crosswalk, session-level
+                                 set_agent_id(), check_permission(),
+                                 require_permission(), and every SECURITY
+                                 DEFINER function (agent_task_add,
+                                 artifact_add, advance_workflow, message_add,
+                                 claim_task, get_agent_context,
+                                 get_pending_tasks, etc.).
+
+    workflow.sql             -- Workflow table, workflow_step table, standard
+                                 workflow seed data.
+
+    role_agents.sql          -- Deactivates old generic agents, creates
+                                 role-based agents (Conductor, Coder, Tester,
+                                 Explorer, Reviewer), assigns skills.
+
+    spawner.sql              -- Legacy plpython3u spawner retained only for
+                                  reference. It is not installed by setup.
+
+   conversation_gateway.sql -- Durable user/Conductor and agent conversation
+                                  metadata, append/context functions, and task
+                                  reservation support for the supervisor.
+
+    hardening.sql            -- Run-token identity, agent-run audit records,
+                                  retry state, and task ownership enforcement.
+
+  supervisor/
+     db_supervisor.py         -- Primary spawner daemon. LISTENs for task
+                                  notifications and reconciles the DB queue,
+                                  spawns agent processes,
+                                 reaps children, recovers stalled tasks.
+                                 Pure stdlib + psql — no dependencies.
+
+    agents.json              -- Local config: DB connection, agent list, and
+                                  supervisor settings. Not committed; copy
+                                  agents.example.json when setting up.
+
+    supervise.sh             -- Bash wrapper for db_supervisor.py (legacy).
+
+   tools/                      -- Bash scripts that agents use to interact
+    lib.sh                      with PostgreSQL. Each returns JSON.
+    claim_task.sh               All use environment variables for DB config:
+    read_task.sh                  PGHOST, PGPORT, PGUSER, PGDATABASE
+    create_task.sh
+    create_artifact.sh
+    advance_task.sh
+    list_pending_tasks.sh
+    agent_context.sh
+    read_agent.sh
+    read_conversation.sh
+    send_message.sh
+    conductor_chat.sh           -- Interactive OpenCode chat that persists
+                                  user and Conductor turns in PostgreSQL.
+
+  tagg/                       -- PostgreSQL data directory (PGDATA).
+                                  DO NOT TOUCH. Contains the actual database.
+
+================================================================================
+3.  DATABASE SCHEMA (tagg schema)
+================================================================================
+
+CORE TABLES
+-----------
+
+  tagg.user
+    Agent/user registry. Columns:
+      id              bigint (PK, auto-generated)
+      name            varchar(50)        -- Unique agent name
+      descr           varchar(400)       -- Description (becomes .md description)
+      is_agent        boolean            -- True for agents, false for human users
+      is_active       boolean            -- Soft delete
+      prompt          text               -- System prompt body (becomes .md body)
+      command         text               -- Shell command to spawn (used by supervisor)
+      max_concurrent  int                -- Max simultaneous tasks
+      opencode_config jsonb              -- YAML frontmatter for .md:
+                                            {"mode":"subagent",
+                                             "permissions":{"bash":"allow",...}}
+      created, updated timestamptz
+
+  tagg.agent_task
+    Task queue. Columns:
+      id              bigint (PK)
+      from_user_id    bigint -> tagg.user.id    -- Who created the task
+      to_user_id      bigint -> tagg.user.id    -- Who should do the work
+      task            text                       -- The task description
+      project_id      bigint -> tagg.project.id
+      parent_id       bigint -> tagg.agent_task.id (nullable, for subtasks)
+      task_status_id  bigint -> tagg.task_status.id
+                        1 = pending, 2 = assigned, 3 = in_progress,
+                        4 = completed, 5 = failed
+      workflow_id     bigint -> tagg.workflow.id
+      is_active       boolean
+      created, updated timestamptz
+
+  tagg.project
+    Projects that tasks belong to.
+
+  tagg.workflow
+    Named workflows (e.g., "standard") that define task status progression.
+
+  tagg.workflow_step
+    Ordered steps within a workflow, linking task_status_id -> next status.
+
+  tagg.task_status
+    Lookup: pending, assigned, in_progress, completed, failed.
+
+  tagg.skill
+    Reusable capability definitions (e.g., "code-python", "filesystem").
+    Each skill has a name, description, and full prompt content.
+
+  tagg.skill_user_crosswalk
+    M:N links between skills and agents. An agent's skills determine
+    its permissions.
+
+  tagg.permission
+    Discrete permissions (e.g., "task:create", "task:claim", "fs:write").
+
+  tagg.skill_permission_crosswalk
+    M:N links between skills and permissions. Defines what each skill
+    is allowed to do.
+
+  tagg.artifact
+    Task output artifacts (code, test results, research notes).
+
+  tagg.message / tagg.conversation
+    Messaging between agents/users.
+
+  tagg.operation_log
+    Audit log for all significant operations.
+
+  tagg.error_log
+    Error logging for permission denials and function failures.
+
+KEY DB FUNCTIONS
+----------------
+
+  Session Identity:
+    tagg.set_agent_id(p_agent_id)     -- Set caller identity for session
+    tagg.check_permission(p_name)     -- Boolean: does caller have permission?
+    tagg.require_permission(p_name)   -- Raises exception if denied
+
+  Task Management:
+    tagg.agent_task_add(from, to, task, project, parent, workflow)
+                                      -- Create task (needs task:create)
+    tagg.claim_task(task_id)          -- Atomically claim pending task
+                                      -- (needs task:claim, checks to_user_id)
+    tagg.advance_workflow(task_id)    -- Move to next workflow step
+                                      -- (needs task:advance)
+
+  Agent Context:
+    tagg.get_agent_context(agent_id)  -- Returns {name, descr, prompt,
+                                      --  skills[], permissions[]} as jsonb
+    tagg.get_pending_tasks(limit)     -- Unclaimed tasks for current agent
+
+  Agent Config:
+    tagg.render_agent_config(agent_id)
+                                      -- Returns complete .md file content
+                                      -- (YAML frontmatter + prompt body)
+
+  Artifact & Message:
+    tagg.artifact_add(task_id, name, descr, type, body)
+    tagg.message_add(conv_id, msg, from, to, alignment)
+    tagg.link_message_agent_task(msg_id, task_id)
+
+  Admin:
+    tagg.agent_add(name, descr, prompt, command, max_concurrent, skills)
+    tagg.project_add(name, descr, created_by)
+    tagg.inactivate(table, id) / tagg.reactivate(table, id)
+
+================================================================================
+4.  SETUP
+================================================================================
+
+FIRST TIME ON A NEW MACHINE
+----------------------------
+
+  1. Prerequisites:
+       - PostgreSQL (any recent version, 14+)
+        - Python 3 and psycopg (`python-psycopg` package)
+       - opencode CLI installed
+       - psql on PATH
+
+  2. Run the bootstrap:
+       bash setup.sh
+
+     This will:
+       - Verify psql is available
+       - Check/create the task_train database
+       - Run all SQL migrations in order
+       - Verify all functions and agents exist
+       - Create supervisor/agents.json if missing
+
+  3. Sync agent configs from DB to filesystem:
+       bash sync_agents.sh
+
+     This generates agents/*.md and .opencode/agents/*.md from the
+     database rows. Re-run whenever you change agent prompts or
+     permissions in the DB.
+
+CONFIGURATION
+-------------
+
+  Database connection defaults:
+    PGHOST=localhost  PGPORT=5432  PGUSER=$USER  PGDATABASE=task_train
+
+  All tool scripts and the supervisor respect these environment variables.
+  Set them in your shell or in the supervisor's agents.json config.
+
+================================================================================
+5.  OPERATION
+================================================================================
+
+START THE SUPERVISOR
+--------------------
+
+     python3 supervisor/db_supervisor.py -c supervisor/agents.json
+
+   Or start the supervisor and open a durable Conductor chat:
+
+     bash start.sh
+
+   `start.sh` records every user and Conductor message in the database. Use
+   `PROJECT_ID`, `CHAT_USER`, and `CONDUCTOR_NAME` to select the participants.
+
+   Or run the supervisor in the background:
+    nohup python3 supervisor/db_supervisor.py -c supervisor/agents.json &
+
+  The supervisor logs to stdout. It:
+    - Polls every 1s for tasks with task_status_id = 1
+    - Spawns agents up to their max_concurrent limit
+    - Reaps finished processes
+    - Recovers stalled tasks (>5min in claimed status -> back to pending)
+    - Syncs agent configs from DB on startup
+
+CREATE A TASK
+-------------
+
+    psql -d task_train -c "
+      SELECT tagg.set_agent_id(8);
+      SELECT tagg.agent_task_add(8, 9, 'Implement the foo feature', 3);
+    "
+
+  This creates a task for Coder (id=9) assigned by Conductor (id=8)
+  in project 3. The supervisor will pick it up within 1 second.
+
+  Agent IDs:
+    6  Admin-Agent
+    8  Conductor
+    9  Coder
+    10 Tester
+    11 Explorer
+    12 Reviewer
+
+  Project IDs:
+    SELECT id, name FROM tagg.project;
+
+CHECK TASK STATUS
+-----------------
+
+    psql -d task_train -c "
+      SELECT id, to_user_id, task_status_id, task
+      FROM tagg.agent_task ORDER BY id DESC LIMIT 10;
+    "
+
+  Status IDs: 1=pending, 2=assigned, 3=in_progress, 4=completed, 5=failed
+
+VIEW AGENT CONTEXT
+------------------
+
+    bash tools/agent_context.sh 9
+
+  Returns JSON with the agent's name, description, prompt, skills,
+  and permissions.
+
+LIST PENDING TASKS
+------------------
+
+    bash tools/list_pending_tasks.sh 9 5
+
+  Returns up to 5 pending tasks for agent 9.
+
+UPDATE AN AGENT'S PROMPT OR PERMISSIONS
+---------------------------------------
+
+    # Change prompt
+    psql -d task_train -c "
+      UPDATE tagg.user
+      SET prompt = 'You are a senior software engineer...'
+      WHERE name = 'Coder';
+    "
+
+    # Change tool permissions (example: revoke edit from Explorer)
+    psql -d task_train -c "
+      UPDATE tagg.user
+      SET opencode_config = jsonb_set(
+        opencode_config, '{permissions,edit}', '\"deny\"'
+      )
+      WHERE name = 'Explorer';
+    "
+
+    # Re-sync to filesystem
+    bash sync_agents.sh
+
+  The next time any agent is spawned, opencode_agent.sh auto-runs
+  sync_agents.sh before invoking opencode, so the changes take
+  effect immediately.
+
+================================================================================
+6.  AGENT LIFECYCLE
+================================================================================
+
+Here is the complete lifecycle of a task from creation to completion:
+
+  1. CREATE
+       Conductor (or a user) calls agent_task_add() to create a task
+       with status = 1 (pending). The task is assigned to a specific
+       agent via to_user_id.
+
+  2. POLL
+       The supervisor's poll loop picks up the pending task. It checks:
+         - Is the agent in agent_map?
+         - Are we under max_total_processes?
+         - Is the agent under its max_concurrent limit?
+
+  3. SPAWN
+       The supervisor sets environment variables (TASK_ID, AGENT_USER_ID,
+       PGHOST, PGPORT, PGUSER, PGDATABASE, PROJECT_ROOT) and forks
+       opencode_agent.sh as a subprocess.
+
+  4. SYNC
+       opencode_agent.sh runs sync_agents.sh to ensure the agent's
+       .md config file on disk matches the DB. This writes to both
+       agents/<name>.md and .opencode/agents/<name>.md.
+
+  5. CLAIM
+       opencode_agent.sh calls tools/claim_task.sh, which invokes
+       tagg.claim_task(task_id). The function:
+         - Verifies the caller has task:claim permission
+         - Checks the task's to_user_id matches the caller
+         - Atomically UPDATEs task_status_id from 1 to 3
+         - Returns the task row as JSON
+
+  6. READ TASK
+       opencode_agent.sh reads the full task details via
+       tools/read_task.sh.
+
+  7. LAUNCH OPENCODE
+       opencode_agent.sh runs:
+         opencode run --agent "<name>" --dir "$PROJECT_ROOT" \
+           --command "Your agent: <name> (id=<id>) ..."
+
+       The agent's .md config provides its role prompt and permitted
+       tools. The command provides the task context and env var reference.
+
+  8. PROCESS
+       The opencode LLM session (the agent) processes the task using
+       bash tool calls. Each tool call runs a tools/*.sh script that
+       talks to PostgreSQL via psql. The agent uses:
+         - $AGENT_USER_ID for its own ID
+         - $TASK_ID for the current task ID
+         - $PROJECT_ROOT for the working directory
+
+  9. COMPLETE
+       When the agent finishes the task, it calls:
+         bash tools/advance_task.sh $TASK_ID $AGENT_USER_ID
+       which moves the task to its next workflow status (typically
+       4 = completed).
+
+  10. REAP
+        The supervisor detects the finished subprocess (poll returns
+        non-None), logs the exit code, and decrements the agent's
+        concurrent count.
+
+  11. RECOVERY (if something goes wrong)
+        Every 60 seconds, the supervisor runs:
+          UPDATE tagg.agent_task SET task_status_id = 1
+          WHERE task_status_id = 3
+            AND updated < NOW() - INTERVAL '5 minutes'
+        This resets tasks that were claimed but never completed
+        (e.g., the agent process crashed) back to pending for
+        re-assignment.
+
+================================================================================
+7.  TOOL REFERENCE
+================================================================================
+
+All tools live in tools/ and accept environment variables:
+  PGHOST, PGPORT, PGUSER, PGDATABASE  (set defaults locally if omitted)
+
+Tools are designed to be called from bash with $AGENT_USER_ID and $TASK_ID.
+
+  tools/read_task.sh <task_id>
+    Returns task details as JSON. Read-only, no permission check.
+    Agent call:  bash tools/read_task.sh $TASK_ID
+
+  tools/claim_task.sh <task_id> <agent_id>
+    Atomically claims a pending task for the given agent.
+    Wraps tagg.claim_task() which requires task:claim permission.
+    Returns {"success":true,"task":{...}} or {"success":false,"error":"..."}.
+    Agent call:  bash tools/claim_task.sh $TASK_ID $AGENT_USER_ID
+
+  tools/create_task.sh <from_id> <to_id> <task_text> <project_id> [workflow]
+    Creates a new task. Requires task:create + task:assign:self/any.
+    Agent call:  bash tools/create_task.sh $AGENT_USER_ID 9 "Write tests" 3
+
+  tools/create_artifact.sh <task_id> <agent_id> <name> <descr> <type> <body>
+    Saves an output artifact for a task. Requires artifact:create.
+    Type is a free-text label (e.g., "code", "test-results", "research").
+    Agent call:  bash tools/create_artifact.sh $TASK_ID $AGENT_USER_ID \
+                   "output" "Results" "code" "def foo(): pass"
+
+  tools/advance_task.sh <task_id> <agent_id>
+    Advances task to its next workflow step. Requires task:advance.
+    Agent call:  bash tools/advance_task.sh $TASK_ID $AGENT_USER_ID
+
+  tools/list_pending_tasks.sh <agent_id> <limit>
+    Lists unclaimed tasks for the agent. Read-only.
+    Agent call:  bash tools/list_pending_tasks.sh $AGENT_USER_ID 5
+
+  tools/agent_context.sh <agent_id>
+    Returns agent prompt, skills, permissions as JSON. Read-only.
+    Agent call:  bash tools/agent_context.sh $AGENT_USER_ID
+
+  tools/read_agent.sh <name_or_id>
+    Looks up an agent by name or numeric ID. Returns JSON.
+    Agent call:  bash tools/read_agent.sh Coder
+    Agent call:  bash tools/read_agent.sh 9
+
+  tools/read_conversation.sh <conversation_id>
+    Returns all messages in a conversation as JSON array.
+    Agent call:  bash tools/read_conversation.sh 1
+
+  tools/send_message.sh <conv_id> <from_id> <to_id> <message>
+    Posts a message to a conversation. Requires message:send.
+    Agent call:  bash tools/send_message.sh 1 $AGENT_USER_ID 8 "Done"
+
+  tools/lib.sh
+    Common library sourced by tools. Provides psql_json() helper,
+    die() and ok() for JSON error handling. Not called directly.
+
+================================================================================
+8.  EXTENDING & CUSTOMIZING
+================================================================================
+
+ADD A NEW AGENT
+---------------
+
+  1. Create the agent in the DB:
+       SELECT tagg.agent_add(
+         'Data-Analyst',   -- name
+         'Analyzes data',  -- description
+         'You are a data analyst...',  -- prompt
+         'agent-scripts/opencode_agent.sh',  -- command
+         2,                -- max_concurrent
+         ARRAY['code-python', 'filesystem']  -- skill names
+       );
+
+  2. Set opencode_config (tool permissions):
+       UPDATE tagg.user
+       SET opencode_config = '{
+         "mode": "subagent",
+         "permissions": {
+           "bash": "allow", "read": "allow", "edit": "allow",
+           "glob": "allow", "grep": "allow",
+           "webfetch": "allow", "websearch": "allow",
+           "task": "deny", "todowrite": "deny",
+           "lsp": "allow", "skill": "deny"
+         }
+       }' WHERE name = 'Data-Analyst';
+
+  3. Add to supervisor config (supervisor/agents.json):
+       {
+         "name": "Data-Analyst",
+         "descr": "Analyzes data",
+         "command": "agent-scripts/opencode_agent.sh",
+         "max_concurrent": 2
+       },
+
+  4. Sync:
+       bash sync_agents.sh
+
+ADD A NEW TOOL
+--------------
+
+  1. Create the script in tools/ following the existing pattern:
+       - Set DB env vars with defaults at the top
+       - Accept positional arguments
+       - Call the appropriate tagg function via psql
+       - Output JSON via psql's row_to_json or json_build_object
+
+  2. Add the tool to the DB prompts of agents that should use it:
+       UPDATE tagg.user SET prompt = prompt || E'\n- `bash tools/new_tool.sh <args>` — description\n'
+       WHERE name = 'Coder';
+
+  3. Grant any needed permissions:
+       INSERT INTO tagg.skill_permission_crosswalk (skill_id, permission_id)
+       SELECT s.id, p.id
+       FROM tagg.skill s, tagg.permission p
+       WHERE s.name = 'code-python' AND p.name = 'new:permission';
+
+  4. Sync:
+       bash sync_agents.sh
+
+ADD A NEW PERMISSION
+--------------------
+
+  1. INSERT INTO tagg.permission (name, descr) VALUES ('new:perm', 'Description');
+  2. INSERT INTO tagg.skill_permission_crosswalk (skill_id, permission_id)
+       SELECT s.id, p.id FROM tagg.skill s, tagg.permission p
+       WHERE s.name = '<skill_name>' AND p.name = 'new:perm';
+  3. Create a SECURITY DEFINER function that calls tagg.require_permission('new:perm').
+
+================================================================================
+9.  PORTABILITY NOTES
+================================================================================
+
+This system is designed to be portable between machines. Here is how:
+
+  - NO hardcoded file paths in any code. The project root is detected from
+    the script location ($BASH_SOURCE) or the $PROJECT_ROOT env var.
+
+  - Agent configurations (prompts, permissions) live IN THE DATABASE, not
+    in files. The .md files on disk are generated from the DB via
+    sync_agents.sh and auto-synced on every agent spawn.
+
+  - Database connection defaults (localhost:5432, user=$USER, db=task_train)
+    are overridable via PGHOST, PGPORT, PGUSER, PGDATABASE env vars.
+
+  - The supervisor resolves relative agent commands against the project_root
+    from its config file (agents.json).
+
+  - To move to a new machine:
+      1. Install PostgreSQL, Python 3, opencode CLI
+      2. Copy this directory
+      3. Run: bash setup.sh
+      4. Restore data from a pg_dump if needed
+      5. Run: python3 supervisor/db_supervisor.py -c supervisor/agents.json
+
+  - The tagg/ directory is the PostgreSQL data directory. On some systems,
+    PostgreSQL is managed system-wide via systemd and the data directory
+    lives elsewhere (e.g., /var/lib/postgresql/). Adjust postgresql.conf
+    and pg_hba.conf as needed.
+
+================================================================================
+  END OF DOCUMENTATION
+================================================================================

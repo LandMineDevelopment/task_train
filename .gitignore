@@ -1,0 +1,18 @@
+# Local PostgreSQL cluster and runtime state
+tagg/
+*.log
+*.pid
+
+# Generated agent configurations and local OpenCode installation
+agents/
+.opencode/
+
+# Machine-specific supervisor connection settings
+supervisor/agents.json
+
+# Python and local secrets
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
