@@ -16,7 +16,7 @@ SET search_path TO tagg, pg_catalog, pg_temp;
 -- 1. permission table
 -- ========================================================================
 CREATE TABLE tagg.permission (
-    id          bigint  GENERATED ALWAYS AS IDENTITY,
+    id          bigint  GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name        varchar(50)  NOT NULL,
     descr       varchar(400) NOT NULL,
     created     timestamptz  NOT NULL DEFAULT CURRENT_TIMESTAMP,

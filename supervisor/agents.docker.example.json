@@ -1,0 +1,22 @@
+{
+  "project_root": "..",
+  "agents": [
+    { "name": "Conductor", "descr": "Technical lead / orchestrator", "command": "agent-scripts/opencode_agent.sh", "max_concurrent": 3 },
+    { "name": "Coder", "descr": "Implements features and fixes bugs", "command": "agent-scripts/opencode_agent.sh", "max_concurrent": 2 },
+    { "name": "Tester", "descr": "Writes and runs tests", "command": "agent-scripts/opencode_agent.sh", "max_concurrent": 2 },
+    { "name": "Explorer", "descr": "Researches codebase", "command": "agent-scripts/opencode_agent.sh", "max_concurrent": 3 },
+    { "name": "Reviewer", "descr": "Reviews code quality", "command": "agent-scripts/opencode_agent.sh", "max_concurrent": 2 }
+  ],
+  "db": {
+    "host": "localhost",
+    "port": 5433,
+    "dbname": "task_train",
+    "user": "task_train",
+    "password": "task_train_dev_only"
+  },
+  "supervisor": {
+    "max_total_processes": 10,
+    "reconcile_interval": 60.0,
+    "task_timeout": 300
+  }
+}

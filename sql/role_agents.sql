@@ -127,12 +127,15 @@ DECLARE
         ['Explorer',  'filesystem,review-sql'],
         ['Reviewer',  'review-sql,code-python']
     ];
+    v_pair text[];
     v_name text;
     v_skills text;
     v_skill text;
 BEGIN
-    FOREACH v_name, v_skills IN SLICE 1 ARRAY v_agents
+    FOREACH v_pair SLICE 1 IN ARRAY v_agents
     LOOP
+        v_name := v_pair[1];
+        v_skills := v_pair[2];
         FOREACH v_skill IN ARRAY string_to_array(v_skills, ',')
         LOOP
             INSERT INTO tagg.skill_user_crosswalk (skill_id, user_id)

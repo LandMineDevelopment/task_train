@@ -79,6 +79,7 @@ fi
 # ------------------------------------------------------------------
 echo "--- Step 3: SQL migrations ---"
 SQL_FILES=(
+    "sql/000_core.sql"
     "sql/agent_config.sql"
     "sql/permissions.sql"
     "sql/workflow.sql"
@@ -92,13 +93,7 @@ SQL_FILES=(
 for f in "${SQL_FILES[@]}"; do
     if [ -f "$f" ]; then
         echo "  Running $f ..."
-        psql -f "$f" 2>&1 | grep -v "^$" | grep -v "^SET$" | grep -v "^CREATE$" \
-            | grep -v "^INSERT" | grep -v "^COMMENT" | grep -v "^DROP" \
-            | grep -v "^ERROR: .* already exists" | grep -v "^ERROR: .* duplicate key" \
-            | grep -v "^ERROR: .* multiple primary keys" \
-            | grep -v "^ERROR: .* constraint" \
-            | grep -v "^psql:" \
-            || true
+        psql -v ON_ERROR_STOP=1 -f "$f"
         pass "Applied $f"
     else
         warn "SQL file not found: $f (skipping)"

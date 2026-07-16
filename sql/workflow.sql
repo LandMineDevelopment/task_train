@@ -13,7 +13,7 @@ SET search_path TO tagg, pg_catalog, pg_temp;
 -- 1. workflow table
 -- ------------------------------------------------------------------------
 CREATE TABLE tagg.workflow (
-    id          bigint  GENERATED ALWAYS AS IDENTITY,
+    id          bigint  GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name        varchar(50)  NOT NULL,
     descr       varchar(400) NOT NULL,
     created     timestamptz  NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -56,7 +56,7 @@ COMMENT ON TRIGGER set_timestamp ON tagg.workflow IS
 -- 2. workflow_step table (ordered M:N between workflow and task_status)
 -- ------------------------------------------------------------------------
 CREATE TABLE tagg.workflow_step (
-    id              bigint  GENERATED ALWAYS AS IDENTITY,
+    id              bigint  GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     workflow_id     bigint  NOT NULL,
     task_status_id  bigint  NOT NULL,
     seq_num         integer NOT NULL,

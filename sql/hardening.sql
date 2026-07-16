@@ -43,8 +43,14 @@ RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg','pg_cat
 DECLARE v tagg.agent_run%ROWTYPE; BEGIN
   SELECT * INTO v FROM tagg.agent_run WHERE id=p_run FOR UPDATE; IF NOT FOUND OR v.status<>'running' THEN RETURN; END IF;
   UPDATE tagg.agent_run SET finished_at=CURRENT_TIMESTAMP,exit_code=p_exit,error_text=p_error,status=CASE WHEN p_exit=0 THEN 'completed' ELSE 'failed' END WHERE id=p_run;
-  IF p_exit<>0 THEN UPDATE tagg.agent_task SET attempt_count=attempt_count+1,last_error=COALESCE(p_error,format('agent exited with code %s',p_exit)),failed_at=CASE WHEN attempt_count+1>=max_attempts THEN CURRENT_TIMESTAMP ELSE NULL END,task_status_id=CASE WHEN attempt_count+1>=max_attempts THEN 5 ELSE 1 END WHERE id=v.task_id AND task_status_id IN (2,3); END IF;
+  IF p_exit<>0 THEN UPDATE tagg.agent_task SET attempt_count=attempt_count+1,last_error=COALESCE(p_error,format('agent exited with code %s',p_exit)),failed_at=CASE WHEN attempt_count+1>=max_attempts THEN CURRENT_TIMESTAMP ELSE NULL END,task_status_id=CASE WHEN attempt_count+1>=max_attempts THEN 7 ELSE 1 END WHERE id=v.task_id AND task_status_id IN (2,3); END IF;
 END $$;
+
+-- Every built-in worker role must be able to claim its assigned task.
+INSERT INTO tagg.skill_permission_crosswalk (skill_id, permission_id)
+SELECT s.id, p.id FROM tagg.skill s CROSS JOIN tagg.permission p
+WHERE s.name IN ('code-python', 'review-sql', 'orchestration') AND p.name = 'task:claim'
+ON CONFLICT (skill_id, permission_id) DO NOTHING;
 
 CREATE OR REPLACE FUNCTION tagg.advance_workflow(p_task_id bigint)
 RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg','pg_catalog','pg_temp' AS $$

@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: task_train
+      POSTGRES_USER: task_train
+      POSTGRES_PASSWORD: task_train_dev_only
+    ports:
+      - "5433:5432"
+    volumes:
+      - task_train_data:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+      - ./sql:/workspace/sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U task_train -d task_train"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  task_train_data:

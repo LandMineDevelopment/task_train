@@ -27,7 +27,7 @@ COMMENT ON COLUMN tagg.user.max_concurrent IS
 -- 2. skill table
 -- ------------------------------------------------------------------------
 CREATE TABLE tagg.skill (
-    id          bigint  GENERATED ALWAYS AS IDENTITY,
+    id          bigint  GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name        varchar(50)  NOT NULL,
     descr       varchar(400) NOT NULL,
     content     text         NOT NULL,
@@ -73,7 +73,7 @@ COMMENT ON TRIGGER set_timestamp ON tagg.skill IS
 -- 3. skill_user_crosswalk table
 -- ------------------------------------------------------------------------
 CREATE TABLE tagg.skill_user_crosswalk (
-    id        bigint  GENERATED ALWAYS AS IDENTITY,
+    id        bigint  GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     skill_id  bigint  NOT NULL,
     user_id   bigint  NOT NULL,
     created   timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
