@@ -65,7 +65,7 @@ bash tools/read_task.sh <task_id>                  — get task details
 bash tools/claim_task.sh <task_id> <agent_id>      — claim a pending task
 bash tools/create_artifact.sh <task_id> <agent_id> <name> <descr> <type> <body>  — save output
 bash tools/advance_task.sh <task_id> <agent_id>    — advance to next workflow step
-bash tools/fail_task.sh <task_id> <agent_id>       — move back one step
+bash tools/fail_task.sh <task_id> <agent_id>       — mark the assigned task as failed
 bash tools/send_message.sh <conv_id> <from> <to> <message>  — send a message
 bash tools/read_agent.sh <name_or_id>              — look up agent info
 """,

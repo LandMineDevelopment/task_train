@@ -1,9 +1,10 @@
 -- ============================================================================
--- Agent Spawner (plpython3u)
+-- Legacy Unsupported Agent Spawner (plpython3u)
 -- ============================================================================
 -- AFTER INSERT trigger on agent_task.  Reads the assigned agent's command
 -- from tagg.user, checks max_concurrent, and spawns the agent process via
--- subprocess.Popen.  Replaces the need for an external supervisor daemon.
+-- subprocess.Popen. This is retained for historical reference only. It is not
+-- bootstrapped and is removed by conversation_gateway.sql; use db_supervisor.py.
 -- ============================================================================
 
 SET search_path TO tagg, pg_catalog, pg_temp;
@@ -64,7 +65,7 @@ AS $function$
 $function$;
 
 COMMENT ON FUNCTION tagg.spawn_agent_on_insert IS
-    'plpython3u trigger function.  Fires on INSERT to agent_task.  Reads the target agent''s command and max_concurrent from tagg.user, checks that the agent is not at capacity, and spawns the agent process via subprocess.Popen.  If the agent has no command or is at capacity, the spawn is silently skipped and the task remains pending.';
+    'Legacy unsupported plpython3u spawner. The supported launcher is supervisor/db_supervisor.py.';
 
 DROP TRIGGER IF EXISTS spawn_agent_on_insert ON tagg.agent_task;
 
@@ -75,6 +76,6 @@ CREATE TRIGGER spawn_agent_on_insert
     EXECUTE FUNCTION tagg.spawn_agent_on_insert();
 
 COMMENT ON TRIGGER spawn_agent_on_insert ON tagg.agent_task IS
-    'Spawns the assigned agent process when a new pending task is created.  Reads command and concurrency limits from tagg.user.';
+    'Legacy unsupported trigger; do not install in the supported deployment.';
 
 RESET search_path;

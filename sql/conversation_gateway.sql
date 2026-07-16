@@ -161,7 +161,7 @@ $function$;
 DROP TRIGGER IF EXISTS spawn_agent_on_insert ON tagg.agent_task;
 
 -- A supervisor reserves a task before it starts an agent process.  The agent
--- then claims the reserved task by moving it from assigned (2) to in_progress (3).
+-- then claims the reserved task by moving it from reserved (2) to in_progress (3).
 CREATE OR REPLACE FUNCTION tagg.reserve_task(p_task_id bigint)
 RETURNS boolean
 LANGUAGE plpgsql

@@ -20,7 +20,7 @@ PGPASSWORD=task_train_dev_only bash tools/smoke_test.sh
 
 The Compose database is available on port `5433` to avoid conflicting with an existing local PostgreSQL server. Its credentials are development-only and must not be used outside a local machine.
 
-The database container initializes the core schema and all repository migrations on its first start. To discard its local data and initialize again:
+The database container initializes the supported bootstrap migration sequence on its first start. To discard its local data and initialize again:
 
 ```bash
 docker compose down -v
@@ -221,7 +221,7 @@ Key existing tables:
 
 Task workers receive `TASK_ID`, `AGENT_USER_ID`, `CONVERSATION_ID`, `PROJECT_ROOT`, and `AGENT_RUN_TOKEN` from the supervisor.
 
-Mutating task tools require `AGENT_RUN_TOKEN`:
+Run-token-scoped task tools include:
 
 ```text
 tools/claim_task.sh
@@ -232,7 +232,7 @@ tools/fail_task.sh
 tools/list_pending_tasks.sh
 ```
 
-The supplied agent ID arguments are retained for compatibility with existing prompts; the intended identity comes from the run token. `send_message.sh` routes messages through the centralized conversation append function.
+All listed tools require `AGENT_RUN_TOKEN`; `list_pending_tasks.sh` is read-only. Supplied agent ID arguments are retained for compatibility with existing prompts; the intended identity comes from the run token. `send_message.sh` routes messages through the centralized conversation append function.
 
 ## Security And Operational Limits
 

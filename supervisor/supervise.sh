@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Supervisor: polls DB for pending tasks, spawns agent processes as the
-# current user. Replaces the plpython3u trigger approach.
+# Legacy polling supervisor. It does not reserve tasks, create run tokens, or
+# supply required conversation context. Use db_supervisor.py instead.
 #
 # Usage:
 #   bash supervise.sh          # run in foreground
 #   nohup bash supervise.sh &  # background
 #
-# Recommended: run as a systemd --user service.
+# Do not use for supported deployments.
 
 POLL_INTERVAL="${POLL_INTERVAL:-2}"
 PID_DIR="/tmp/opencode-supervisor"
@@ -27,7 +27,7 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM
 
-log "started (pid=$$), polling every ${POLL_INTERVAL}s"
+log "legacy polling supervisor started (pid=$$), interval=${POLL_INTERVAL}s"
 
 while true; do
     IFS='|' read -r task_id to_user_id command max_concurrent <<< "$(

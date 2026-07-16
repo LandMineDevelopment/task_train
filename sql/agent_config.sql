@@ -2,8 +2,8 @@
 -- Agent Configuration: prompts, skills, and runtime config
 -- ============================================================================
 -- Stores agent initialization prompts and reusable skill definitions in the
--- database so agents are self-configuring.  Agents read their own prompt
--- and skills at startup — no external config files needed.
+-- database as the source of truth. sync_agents.sh renders prompts and
+-- frontmatter into the OpenCode Markdown agent files used at runtime.
 -- ============================================================================
 
 SET search_path TO tagg, pg_catalog, pg_temp;
@@ -17,11 +17,11 @@ ALTER TABLE tagg.user
     ADD COLUMN max_concurrent integer NOT NULL DEFAULT 1;
 
 COMMENT ON COLUMN tagg.user.prompt IS
-    'Base system prompt / personality for this agent (e.g. "You are Agent-Alpha, a senior software engineer."). Agents read this at startup to initialize their context.';
+    'Database source of truth for an agent prompt. sync_agents.sh renders it into the OpenCode Markdown agent file.';
 COMMENT ON COLUMN tagg.user.command IS
-    'Shell command to execute when spawning this agent (e.g. python3 /opt/agents/coding_agent.py). Used by the plpython3u spawn trigger. NULL means this agent cannot be spawned.';
+    'Legacy per-agent command metadata. The supported external supervisor uses commands from supervisor/agents.json.';
 COMMENT ON COLUMN tagg.user.max_concurrent IS
-    'Maximum number of tasks this agent can handle simultaneously. The spawn trigger skips spawning if this limit is reached.';
+    'Per-agent concurrency metadata. The supported external supervisor enforces configured concurrency limits.';
 
 -- ------------------------------------------------------------------------
 -- 2. skill table

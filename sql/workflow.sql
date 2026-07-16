@@ -276,10 +276,9 @@ COMMENT ON FUNCTION tagg.agent_task_add IS
 -- ------------------------------------------------------------------------
 -- 7. Everything is wired
 -- ------------------------------------------------------------------------
--- The existing enforce_parent_seq and notify_task_event triggers continue
--- to fire on INSERT/UPDATE.  The plpython3u spawn trigger (added separately)
--- will check task_status_id = 1 (pending) and consult workflow_step to
--- decide whether to spawn an agent.
--- advance_workflow() is the canonical way to move a task to its next state.
+-- task_ready_notification wakes the external Python supervisor when a task
+-- becomes pending. The supervisor reserves the task before starting a
+-- tokenized worker. advance_workflow() handles only normal linear progression;
+-- failed and cancelled are terminal exception states.
 
 RESET search_path;

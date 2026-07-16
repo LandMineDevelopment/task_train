@@ -1,4 +1,5 @@
--- Create task for Coder to build alphabet TUI
+-- Legacy manual example. Resolve current agent/project IDs by name and create
+-- tasks through a valid run-token context; do not rely on these hard-coded IDs.
 SELECT tagg.set_agent_id(8);
 SELECT tagg.agent_task_add(
   8,   -- from_user_id (Conductor)

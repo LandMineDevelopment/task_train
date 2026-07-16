@@ -90,6 +90,7 @@ SQL_FILES=(
     "sql/hardening.sql"
     "sql/workflow_hardening.sql"
     "sql/generic_entities.sql"
+    "sql/documentation_comments.sql"
 )
 
 for f in "${SQL_FILES[@]}"; do

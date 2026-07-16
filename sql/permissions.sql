@@ -2,12 +2,12 @@
 -- Permissions System
 -- ============================================================================
 -- Associates permissions with skills (M:N via crosswalk).  Agents inherit
--- permissions from their assigned skills.  Every SECURITY DEFINER function
--- calls tagg.require_permission() at the top, which reads the caller's
--- identity from a session-level custom variable (set by tagg.set_agent_id()).
+-- permissions from their assigned skills. Permission-gated worker mutations
+-- call tagg.require_permission(), which reads run-scoped identity from the
+-- session context established by tagg.set_agent_run_context().
 --
--- If the caller lacks the required permission, the call is logged to
--- tagg.error_log (via log_error / dblink) and an exception is raised.
+-- If the caller lacks the required permission, the call is logged through
+-- tagg.log_error and an exception is raised.
 -- ============================================================================
 
 SET search_path TO tagg, pg_catalog, pg_temp;
@@ -199,7 +199,7 @@ END;
 $function$;
 
 COMMENT ON FUNCTION tagg.set_agent_id IS
-    'Sets the current session''s agent identity.  Must be called at the start of a session so that subsequent SECURITY DEFINER functions can identify the caller.  Raises if the ID is not a valid, active agent.';
+    'Legacy session identity helper. Tokenized workers use set_agent_run_context(token) instead.';
 
 -- ========================================================================
 -- 6. Permission-checking functions
@@ -268,10 +268,10 @@ END;
 $function$;
 
 COMMENT ON FUNCTION tagg.require_permission IS
-    'Checks that the session agent has the named permission.  Logs to tagg.error_log and raises EXCEPTION if denied.  Designed to be called at the top of every SECURITY DEFINER function.';
+    'Checks that the session agent has the named permission. Logs denial and raises EXCEPTION. Used by permission-gated mutating functions.';
 
 -- ========================================================================
--- 7. Add require_permission to every callable SECURITY DEFINER function
+-- 7. Add require_permission to permission-gated callable functions
 -- ========================================================================
 
 -- 7a. agent_task_add
@@ -970,7 +970,7 @@ END;
 $function$;
 
 COMMENT ON FUNCTION tagg.claim_task IS
-    'Atomically claims a pending task (status 1 -> 3) for the current session agent. Requires task:claim. Validates to_user_id matches the caller. Returns the claimed task row or an error.';
+    'Claims a pending or reserved task (status 1 or 2 -> 3) for the current run-context agent. Requires task:claim and matching assignee.';
 
 -- 9b. get_agent_context — return agent info, skills, permissions as jsonb
 CREATE OR REPLACE FUNCTION tagg.get_agent_context(p_agent_id bigint DEFAULT NULL)
