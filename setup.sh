@@ -88,6 +88,7 @@ SQL_FILES=(
     "sql/agent_config_db.sql"
     "sql/conversation_gateway.sql"
     "sql/hardening.sql"
+    "sql/workflow_hardening.sql"
 )
 
 for f in "${SQL_FILES[@]}"; do

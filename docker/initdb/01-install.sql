@@ -8,3 +8,4 @@
 \i /workspace/sql/agent_config_db.sql
 \i /workspace/sql/conversation_gateway.sql
 \i /workspace/sql/hardening.sql
+\i /workspace/sql/workflow_hardening.sql

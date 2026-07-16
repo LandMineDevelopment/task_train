@@ -5,7 +5,8 @@
     { "name": "Coder", "descr": "Implements features and fixes bugs", "command": "agent-scripts/opencode_agent.sh", "max_concurrent": 2 },
     { "name": "Tester", "descr": "Writes and runs tests", "command": "agent-scripts/opencode_agent.sh", "max_concurrent": 2 },
     { "name": "Explorer", "descr": "Researches codebase", "command": "agent-scripts/opencode_agent.sh", "max_concurrent": 3 },
-    { "name": "Reviewer", "descr": "Reviews code quality", "command": "agent-scripts/opencode_agent.sh", "max_concurrent": 2 }
+    { "name": "Reviewer", "descr": "Reviews code quality", "command": "agent-scripts/opencode_agent.sh", "max_concurrent": 2 },
+    { "name": "Manager", "descr": "Internal orchestration worker", "command": "agent-scripts/opencode_agent.sh", "max_concurrent": 3 }
   ],
   "db": {
     "host": "localhost",

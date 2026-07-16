@@ -7,16 +7,16 @@ export PGUSER="${PGUSER:-kasey}"
 export PGDATABASE="${PGDATABASE:-task_train}"
 
 # fail_task.sh <task_id> <agent_id>
-# Moves a task back one workflow step. Requires task:fail.
+# Marks the caller's assigned task as failed. Requires task:fail.
 
 TASK_ID="${1:?usage: fail_task.sh <task_id> <agent_id>}"
 AGENT_ID="${2:?}"
 : "${AGENT_RUN_TOKEN:?AGENT_RUN_TOKEN required}"
 
 psql --no-psqlrc -A -t 2>/dev/null <<SQL
-SELECT tagg.set_agent_run_context('$AGENT_RUN_TOKEN');
+SELECT tagg.set_agent_run_context('$AGENT_RUN_TOKEN') AS agent_id \gset
 SELECT json_build_object(
   'success', true,
-  'new_status_id', tagg.regress_workflow($TASK_ID)
+  'new_status_id', tagg.fail_task($TASK_ID)
 )::text;
 SQL

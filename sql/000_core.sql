@@ -19,7 +19,7 @@ CREATE TABLE tagg.project (
 );
 CREATE TABLE tagg.task_status (id bigint PRIMARY KEY, name varchar(50) NOT NULL UNIQUE);
 INSERT INTO tagg.task_status(id,name) VALUES
-  (1,'pending'),(2,'claimed'),(3,'in_progress'),(4,'completed'),(5,'tested'),(6,'validated'),(7,'failed'),(8,'cancelled');
+  (1,'pending'),(2,'reserved'),(3,'in_progress'),(4,'completed'),(5,'tested'),(6,'validated'),(7,'failed'),(8,'cancelled');
 CREATE TABLE tagg.agent_task (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, from_user_id bigint NOT NULL REFERENCES tagg.user(id),
   to_user_id bigint NOT NULL REFERENCES tagg.user(id), parent_id bigint REFERENCES tagg.agent_task(id),

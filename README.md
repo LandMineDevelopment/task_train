@@ -76,10 +76,27 @@ The database is the source of truth for task and conversation state. The supervi
 The supervisor reserves a pending task before spawning a worker:
 
 ```text
-pending (1) -> assigned (2) -> in_progress (3)
+pending (1) -> reserved (2) -> in_progress (3)
 ```
 
 `agent_run` records the spawned worker, its token hash, start/end time, exit code, and error. A nonzero worker exit requeues a task until `max_attempts` is reached, then moves it to `failed (7)`.
+
+`failed (7)` and `cancelled (8)` are terminal exceptions rather than linear workflow steps. A worker may fail only its assigned reserved or in-progress task. Cancellation requires the dedicated `task:cancel` permission.
+
+## Roles And Permissions
+
+Active roles use dedicated skills rather than overlapping generic skills:
+
+| Role | Skill | Allowed work |
+| --- | --- | --- |
+| Conductor | `orchestration` | Create and delegate tasks, link/send task messages, report progress. |
+| Coder | `code-python` | Claim, implement, save artifacts, complete or fail assigned work. |
+| Tester | `testing` | Claim, write tests, save evidence, complete or fail assigned work. |
+| Explorer | `research` | Claim, research, save findings, and complete assigned research. |
+| Reviewer | `review` | Claim, review, save findings, complete or fail assigned work. |
+| Manager | `orchestration`, `manager-runtime` | Coordinate assigned work and complete or fail Manager-owned tasks. |
+
+`Admin-Agent` retains administrative permissions and is not part of the normal delivery workflow.
 
 ## Conversations
 
@@ -173,6 +190,7 @@ role_agents.sql
 agent_config_db.sql
 conversation_gateway.sql
 hardening.sql
+workflow_hardening.sql
 ```
 
 `000_core.sql` provides the base schema required by the historical migrations. Bootstrap stops on the first SQL error. Migrations remain order-dependent and are intended for an empty database; Docker Compose is the recommended clean-install path.
@@ -217,7 +235,7 @@ The supplied agent ID arguments are retained for compatibility with existing pro
 - Several gateway functions are `SECURITY DEFINER` and need tighter caller authorization and explicit grants before multi-user deployment.
 - Stale-task recovery uses timestamps, not a worker heartbeat. A long-running worker can be requeued and duplicated.
 - The supervisor can only auto-create configured agents when its database identity is authorized for `admin:agent`.
-- `fail_task.sh` calls `regress_workflow`, which does not yet enforce ownership or a defined `task:fail` permission.
+- `regress_workflow()` remains a legacy function. Use `tools/fail_task.sh`, which calls the ownership-checked `fail_task()` function.
 
 ## Repository Layout
 

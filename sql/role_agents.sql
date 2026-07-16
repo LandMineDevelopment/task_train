@@ -116,7 +116,20 @@ VALUES (
 );
 
 -- ------------------------------------------------------------------------
--- 4. Assign skills to role agents
+-- 4. Manager
+-- ------------------------------------------------------------------------
+INSERT INTO tagg.user (name, descr, is_agent, prompt, command, max_concurrent)
+VALUES (
+    'Manager',
+    'Internal orchestration worker. Coordinates assigned work and reports outcomes.',
+    true,
+    'You coordinate assigned orchestration work and explicitly complete or fail your own tasks.',
+    'agent-scripts/opencode_agent.sh',
+    3
+);
+
+-- ------------------------------------------------------------------------
+-- 5. Assign skills to role agents
 -- ------------------------------------------------------------------------
 DO $$
 DECLARE
@@ -125,7 +138,8 @@ DECLARE
         ['Coder',     'code-python,filesystem,agent-communication'],
         ['Tester',    'review-sql,filesystem,code-python'],
         ['Explorer',  'filesystem,review-sql'],
-        ['Reviewer',  'review-sql,code-python']
+        ['Reviewer',  'review-sql,code-python'],
+        ['Manager',   'orchestration']
     ];
     v_pair text[];
     v_name text;

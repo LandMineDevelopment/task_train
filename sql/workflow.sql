@@ -111,8 +111,8 @@ CREATE INDEX workflow_step_active_idx
 -- 3. Seed default workflows
 -- ------------------------------------------------------------------------
 INSERT INTO tagg.workflow (name, descr) VALUES
-    ('standard', 'Full task lifecycle: pending → claimed → in_progress → completed → tested → validated.'),
-    ('quick',    'Simplified lifecycle: pending → claimed → in_progress → completed.');
+    ('standard', 'Full task lifecycle: pending → reserved → in_progress → completed → tested → validated.'),
+    ('quick',    'Simplified lifecycle: pending → reserved → in_progress → completed.');
 
 WITH w AS (SELECT id FROM tagg.workflow WHERE name = 'standard')
 INSERT INTO tagg.workflow_step (workflow_id, task_status_id, seq_num)
@@ -120,7 +120,7 @@ SELECT w.id, s.id, s.seq
 FROM w,
   (VALUES
     (1, 1),   -- pending
-    (2, 2),   -- claimed
+    (2, 2),   -- reserved
     (3, 3),   -- in_progress
     (4, 4),   -- completed
     (5, 5),   -- tested
@@ -133,7 +133,7 @@ SELECT w.id, s.id, s.seq
 FROM w,
   (VALUES
     (1, 1),   -- pending
-    (2, 2),   -- claimed
+    (2, 2),   -- reserved
     (3, 3),   -- in_progress
     (4, 4)    -- completed
   ) AS s(seq, id);
