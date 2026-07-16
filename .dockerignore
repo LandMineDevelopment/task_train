@@ -1,0 +1,9 @@
+.git/
+.opencode/
+agents/
+tagg/
+__pycache__/
+*.pyc
+*.log
+*.pid
+supervisor/agents.json

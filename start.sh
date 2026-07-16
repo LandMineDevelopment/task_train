@@ -17,6 +17,7 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 SUPERVISOR_LOG="/tmp/opencode-supervisor.log"
 SUPERVISOR_PIDFILE="/tmp/opencode-supervisor.pid"
+SUPERVISOR_CONFIG="${SUPERVISOR_CONFIG:-supervisor/agents.json}"
 
 cd "$PROJECT_ROOT"
 
@@ -30,7 +31,7 @@ start_supervisor() {
     bash sync_agents.sh 2>&1 | sed 's/^/  /'
 
     echo "[start] Starting supervisor..."
-    nohup python3 -u supervisor/db_supervisor.py > "$SUPERVISOR_LOG" 2>&1 &
+    nohup python3 -u supervisor/db_supervisor.py -c "$SUPERVISOR_CONFIG" > "$SUPERVISOR_LOG" 2>&1 &
     SUPERVISOR_PID=$!
     echo "$SUPERVISOR_PID" > "$SUPERVISOR_PIDFILE"
 

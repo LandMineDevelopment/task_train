@@ -17,5 +17,28 @@ services:
       timeout: 5s
       retries: 20
 
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: task_train
+      PGUSER: task_train
+      PGPASSWORD: task_train_dev_only
+      SUPERVISOR_CONFIG: supervisor/agents.container.json
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - opencode_data:/home/app/.local/share/opencode
+      - opencode_config:/home/app/.config/opencode
+    stdin_open: true
+    tty: true
+    command: ["sleep", "infinity"]
+
 volumes:
   task_train_data:
+  opencode_data:
+  opencode_config:

@@ -8,14 +8,15 @@ This is an experimental system, not a production-ready security boundary. It has
 
 ## Quick Start With Docker
 
-Docker Compose is the supported way to create a fresh local database. From a new clone:
+Docker Compose is the supported full environment. It includes PostgreSQL, Python with `psycopg`, `psql`, Git, Bash, and OpenCode. Docker is the only required local installation, plus credentials for the model provider.
+
+From a new clone:
 
 ```bash
 git clone https://github.com/LandMineDevelopment/task_train.git
 cd task_train
-docker compose up -d
-PGHOST=localhost PGPORT=5433 PGUSER=task_train PGDATABASE=task_train \
-PGPASSWORD=task_train_dev_only bash tools/smoke_test.sh
+docker compose up -d --build
+docker compose exec app bash tools/smoke_test.sh
 ```
 
 The Compose database is available on port `5433` to avoid conflicting with an existing local PostgreSQL server. Its credentials are development-only and must not be used outside a local machine.
@@ -27,16 +28,20 @@ docker compose down -v
 docker compose up -d
 ```
 
-OpenCode and the Python supervisor run on the host. Install `psycopg` and OpenCode, then configure and start the host-side services:
+Authenticate OpenCode inside the application container, then start the durable Conductor chat:
 
 ```bash
-cp supervisor/agents.docker.example.json supervisor/agents.json
-export PGHOST=localhost PGPORT=5433 PGUSER=task_train PGDATABASE=task_train
-export PGPASSWORD=task_train_dev_only
-bash start.sh
+docker compose exec app opencode auth login
+docker compose exec app bash start.sh
 ```
 
-`start.sh` opens the durable Conductor chat. Type `/exit` to stop it. Before starting, ensure the OpenCode CLI is authenticated for the model provider you intend to use.
+OpenCode configuration is stored in named Docker volumes, so authentication survives application-container replacement. `start.sh` opens the durable Conductor chat; type `/exit` to stop it. The database is exposed on `localhost:5433` only for optional tools such as DBeaver.
+
+To stop the environment without removing database or OpenCode state:
+
+```bash
+docker compose down
+```
 
 ## Native Install
 
