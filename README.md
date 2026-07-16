@@ -15,11 +15,26 @@ From a new clone:
 ```bash
 git clone https://github.com/LandMineDevelopment/task_train.git
 cd task_train
+./configure.sh
 docker compose up -d --build
 docker compose exec app bash tools/smoke_test.sh
 ```
 
-The Compose database is available on port `5433` to avoid conflicting with an existing local PostgreSQL server. Its credentials are development-only and must not be used outside a local machine.
+`configure.sh` creates a local, Git-ignored `.env` file and generates a secure database password unless you provide one. It asks for the Compose project name, host database port, database name, and database user. For automated setup:
+
+```bash
+./configure.sh --non-interactive --port 5434 --database task_train --user task_train
+```
+
+The Compose database uses port `5433` by default. If it is occupied, choose another port during configuration. The application container always connects internally to `db:5432`; use the selected host port only for DBeaver or other host tools.
+
+Show the current connection details for DBeaver:
+
+```bash
+bash tools/show_connection.sh
+```
+
+Changing only the host port is safe after first startup. PostgreSQL applies the database name, user, and password only when its data volume is initialized. To change those three values later, run `docker compose down -v`, re-run `./configure.sh`, then start Compose again. Docker credentials are development-only and must not be used outside a local machine.
 
 The database container initializes the supported bootstrap migration sequence on its first start. To discard its local data and initialize again:
 
@@ -35,7 +50,7 @@ docker compose exec app opencode auth login
 docker compose exec app bash start.sh
 ```
 
-OpenCode configuration is stored in named Docker volumes, so authentication survives application-container replacement. `start.sh` opens the durable Conductor chat; type `/exit` to stop it. The database is exposed on `localhost:5433` only for optional tools such as DBeaver.
+OpenCode configuration is stored in named Docker volumes, so authentication survives application-container replacement. `start.sh` opens the durable Conductor chat; type `/exit` to stop it.
 
 To stop the environment without removing database or OpenCode state:
 

@@ -1,12 +1,14 @@
+name: ${TASK_TRAIN_COMPOSE_PROJECT:-task_train}
+
 services:
   db:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: task_train
-      POSTGRES_USER: task_train
-      POSTGRES_PASSWORD: task_train_dev_only
+      POSTGRES_DB: ${POSTGRES_DB:-task_train}
+      POSTGRES_USER: ${POSTGRES_USER:-task_train}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run ./configure.sh before starting Docker Compose}
     ports:
-      - "5433:5432"
+      - "${TASK_TRAIN_DB_PORT:-5433}:5432"
     volumes:
       - task_train_data:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro
@@ -25,10 +27,10 @@ services:
     environment:
       PGHOST: db
       PGPORT: 5432
-      PGDATABASE: task_train
-      PGUSER: task_train
-      PGPASSWORD: task_train_dev_only
-      SUPERVISOR_CONFIG: supervisor/agents.container.json
+      PGDATABASE: ${POSTGRES_DB:-task_train}
+      PGUSER: ${POSTGRES_USER:-task_train}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Run ./configure.sh before starting Docker Compose}
+      SUPERVISOR_CONFIG: /tmp/agents.container.json
     working_dir: /workspace
     volumes:
       - .:/workspace
