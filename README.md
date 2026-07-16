@@ -191,6 +191,7 @@ agent_config_db.sql
 conversation_gateway.sql
 hardening.sql
 workflow_hardening.sql
+generic_entities.sql
 ```
 
 `000_core.sql` provides the base schema required by the historical migrations. Bootstrap stops on the first SQL error. Migrations remain order-dependent and are intended for an empty database; Docker Compose is the recommended clean-install path.
@@ -207,6 +208,10 @@ Key existing tables:
 | `tagg.conversation`, `tagg.message` | User/Conductor and agent-pair conversation history. |
 | `tagg.agent_run` | Spawned worker audit record, token hash, timestamps, exit status, and error. |
 | `tagg.artifact` | Task output artifacts. |
+| `tagg.tag` | Reusable labels for projects, files, notes, objects, conversations, messages, tasks, and artifacts. |
+| `tagg.note`, `tagg.file` | Text notes and binary file records. |
+| `tagg.obj_type`, `tagg.object` | Typed JSON documents. |
+| `tagg.artifact_type` | Artifact type lookup records. |
 
 `conversation_gateway.sql` adds conversation kind/metadata and helper functions such as `get_or_create_user_conductor_conversation`, `append_conversation_message`, `get_conversation_context`, and `reserve_task`.
 

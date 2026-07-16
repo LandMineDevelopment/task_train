@@ -9,3 +9,4 @@
 \i /workspace/sql/conversation_gateway.sql
 \i /workspace/sql/hardening.sql
 \i /workspace/sql/workflow_hardening.sql
+\i /workspace/sql/generic_entities.sql
