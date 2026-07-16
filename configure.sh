@@ -9,6 +9,10 @@ USERNAME="${POSTGRES_USER:-task_train}"
 PASSWORD="${POSTGRES_PASSWORD:-}"
 PROJECT="${TASK_TRAIN_COMPOSE_PROJECT:-task_train}"
 INTERACTIVE=true
+OLD_DATABASE=""
+OLD_USERNAME=""
+OLD_PASSWORD=""
+OLD_PROJECT=""
 
 usage() {
     printf 'Usage: %s [--port PORT] [--database NAME] [--user NAME] [--password PASSWORD] [--project NAME] [--non-interactive]\n' "$0"
@@ -31,10 +35,10 @@ if [[ -f "$ENV_FILE" ]]; then
     while IFS='=' read -r key value; do
         case "$key" in
             TASK_TRAIN_DB_PORT) [[ "$PORT" == "5433" ]] && PORT="$value" ;;
-            POSTGRES_DB) [[ "$DATABASE" == "task_train" ]] && DATABASE="$value" ;;
-            POSTGRES_USER) [[ "$USERNAME" == "task_train" ]] && USERNAME="$value" ;;
-            POSTGRES_PASSWORD) [[ -z "$PASSWORD" ]] && PASSWORD="$value" ;;
-            TASK_TRAIN_COMPOSE_PROJECT) [[ "$PROJECT" == "task_train" ]] && PROJECT="$value" ;;
+            POSTGRES_DB) OLD_DATABASE="$value"; [[ "$DATABASE" == "task_train" ]] && DATABASE="$value" ;;
+            POSTGRES_USER) OLD_USERNAME="$value"; [[ "$USERNAME" == "task_train" ]] && USERNAME="$value" ;;
+            POSTGRES_PASSWORD) OLD_PASSWORD="$value"; [[ -z "$PASSWORD" ]] && PASSWORD="$value" ;;
+            TASK_TRAIN_COMPOSE_PROJECT) OLD_PROJECT="$value"; [[ "$PROJECT" == "task_train" ]] && PROJECT="$value" ;;
         esac
     done < "$ENV_FILE"
 fi
@@ -57,8 +61,12 @@ fi
 [[ "$PROJECT" =~ ^[A-Za-z0-9_-]+$ ]] || { printf 'Project name contains unsupported characters.\n' >&2; exit 1; }
 [[ "$PASSWORD" =~ ^[A-Za-z0-9_@%+=.,/-]+$ ]] || { printf 'Password may contain letters, numbers, and _@%%+=.,/-.\n' >&2; exit 1; }
 
-if [[ -f "$ENV_FILE" ]] && docker compose ps -q db 2>/dev/null | grep -q .; then
-    printf 'Existing database container detected. Changing database name, user, or password requires: docker compose down -v\n' >&2
+if [[ -n "$OLD_PROJECT" && "$PROJECT" == "$OLD_PROJECT" ]] \
+    && [[ "$DATABASE" != "$OLD_DATABASE" || "$USERNAME" != "$OLD_USERNAME" || "$PASSWORD" != "$OLD_PASSWORD" ]] \
+    && docker volume inspect "${OLD_PROJECT}_task_train_data" >/dev/null 2>&1; then
+    printf 'Database name, user, or password cannot change while the %s database volume exists.\n' "$OLD_PROJECT" >&2
+    printf 'To discard its data and apply new credentials: docker compose down -v\n' >&2
+    exit 1
 fi
 
 umask 077
