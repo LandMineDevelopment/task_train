@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -51,6 +51,13 @@ function App() {
     if (draft.trim() && selectedId !== null && !sendMessage.isPending) sendMessage.mutate(draft);
   }
 
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (draft.trim() && selectedId !== null && !sendMessage.isPending) sendMessage.mutate(draft);
+    }
+  }
+
   return <main className="shell">
     <aside className="sidebar">
       <header><p className="eyebrow">Task Train</p><h1>Conductor Inbox</h1><p className="subtle">User conversations</p></header>
@@ -70,7 +77,7 @@ function App() {
       {detail.data ? <>
         <header className="thread-header"><div><p className="eyebrow">{detail.data.conversation.project_name}</p><h2>{detail.data.conversation.title}</h2><p className="subtle">{detail.data.conversation.owner_name ?? "User"} ↔ {detail.data.conversation.conductor_name ?? "Conductor"}</p></div><span className="count">{detail.data.messages.length} messages</span></header>
         <div className="messages">{detail.data.messages.map((message) => <article key={message.id} className={`message ${message.sender_is_agent ? "agent" : "human"}`}><div className="message-meta"><strong>{message.sender_name}</strong><time>{formatTime(message.created)}</time></div><p>{message.message}</p>{message.task_ids.length > 0 && <span className="task-link">Tasks #{message.task_ids.join(", #")}</span>}</article>)}{detail.data.messages.length === 0 && <p className="empty">Start this conversation with the Conductor.</p>}</div>
-        <form className="composer" onSubmit={submitMessage}><textarea aria-label="Message Conductor" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Tell the Conductor what you need..." disabled={sendMessage.isPending} /><div><span>{sendMessage.isPending ? "Queueing workflow..." : "Conductor workflow runs in the background."}</span><button type="submit" disabled={!draft.trim() || sendMessage.isPending}>{sendMessage.isPending ? "Sending..." : "Send"}</button></div>{sendMessage.isError && <p className="form-error">The message could not be queued. Check the local services and try again.</p>}</form>
+        <form className="composer" onSubmit={submitMessage}><textarea aria-label="Message Conductor" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleComposerKeyDown} placeholder="Tell the Conductor what you need..." disabled={sendMessage.isPending} /><div><span>{sendMessage.isPending ? "Queueing workflow..." : "Enter to send · Shift+Enter for a new line."}</span><button type="submit" disabled={!draft.trim() || sendMessage.isPending}>{sendMessage.isPending ? "Sending..." : "Send"}</button></div>{sendMessage.isError && <p className="form-error">The message could not be queued. Check the local services and try again.</p>}</form>
       </> : <div className="empty-state">{detail.isLoading ? "Loading conversation..." : "Select a conversation to read it."}</div>}
     </section>
   </main>;
