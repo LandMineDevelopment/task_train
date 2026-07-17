@@ -10,6 +10,13 @@ button, input, textarea { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 h1, h2, p { margin: 0; }
 
+* { scrollbar-color: #40526f #10182b; scrollbar-width: thin; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: #10182b; }
+*::-webkit-scrollbar-thumb { border: 3px solid #10182b; border-radius: 999px; background: #40526f; }
+*::-webkit-scrollbar-thumb:hover { background: #75e6b2; }
+*::-webkit-scrollbar-corner { background: #10182b; }
+
 .shell {
   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
@@ -128,9 +135,9 @@ button:disabled, textarea:disabled { cursor: not-allowed; opacity: .6; }
 
 .workspace-nav {
   display: flex;
-  min-height: 40px;
+  min-height: 36px;
   gap: 6px;
-  padding: 5px 20px;
+  padding: 4px 20px;
   overflow-x: auto;
   border-bottom: 1px solid #263451;
   background: #10182b;
@@ -147,7 +154,7 @@ button:disabled, textarea:disabled { cursor: not-allowed; opacity: .6; }
   cursor: pointer;
   font: inherit;
 }
-.workspace-nav button { border: 1px solid #36557f; border-radius: 6px; padding: 3px 7px; font-size: .74rem; }
+.workspace-nav button { border: 1px solid #36557f; border-radius: 6px; padding: 2px 7px; font-size: .74rem; }
 .tab { display: flex; flex: 0 0 auto; overflow: hidden; border: 1px solid #334363; border-radius: 6px; background: #17223a; white-space: nowrap; }
 .tab.active { border-color: #75e6b2; }
 .tab button { max-width: 210px; overflow: hidden; padding: 5px 8px; text-overflow: ellipsis; }
@@ -158,11 +165,13 @@ button:disabled, textarea:disabled { cursor: not-allowed; opacity: .6; }
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 16px clamp(20px, 4vw, 42px);
+  min-height: 58px;
+  padding: 10px clamp(20px, 4vw, 42px);
   border-bottom: 1px solid #263451;
 }
 
 .title-row, .rename-form { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.thread-header .eyebrow, .thread-header .subtle { display: none; }
 .title-row h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rename-button, .rename-form button {
   flex: 0 0 auto;
@@ -252,7 +261,7 @@ button:disabled, textarea:disabled { cursor: not-allowed; opacity: .6; }
   .shell { grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); }
   .shell.sidebar-collapsed { grid-template-columns: 48px minmax(0, 1fr); }
   .sidebar-content { padding: 24px 14px; }
-  .thread-header { padding-top: 14px; padding-bottom: 14px; }
+  .thread-header { padding-top: 10px; padding-bottom: 10px; }
 }
 
 @media (max-width: 720px) {
@@ -264,7 +273,7 @@ button:disabled, textarea:disabled { cursor: not-allowed; opacity: .6; }
   .sidebar-collapsed .sidebar { min-height: 0; }
   .sidebar-collapsed .sidebar-toggle { top: 13px; right: 13px; }
   .workspace-nav { padding-right: 16px; padding-left: 16px; }
-  .thread-header { align-items: flex-start; padding: 14px 20px; }
+  .thread-header { align-items: center; padding: 10px 20px; }
   .messages, .detail-body, .record-list { padding: 20px; }
   .message { max-width: 100%; padding: 14px; }
   .composer { padding: 12px 16px max(16px, env(safe-area-inset-bottom)); }
