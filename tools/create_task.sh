@@ -16,6 +16,8 @@ PROJECT_ID="${4:?}"
 WORKFLOW="${5:-standard}"
 : "${AGENT_RUN_TOKEN:?AGENT_RUN_TOKEN required}"
 : "${TASK_ID:?TASK_ID required}"
+[[ "$FROM" =~ ^[0-9]+$ && "$TO" =~ ^[0-9]+$ && "$PROJECT_ID" =~ ^[0-9]+$ && "$TASK_ID" =~ ^[0-9]+$ ]] || { printf 'Task, agent, and project IDs must be numeric.\n' >&2; exit 2; }
+[[ "$WORKFLOW" =~ ^[A-Za-z0-9_-]+$ ]] || { printf 'Workflow name contains unsupported characters.\n' >&2; exit 2; }
 
 task_q="${TASK//\'/\'\'}"
 wf_q="${WORKFLOW//\'/\'\'}"

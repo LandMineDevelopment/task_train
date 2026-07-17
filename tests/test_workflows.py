@@ -54,6 +54,15 @@ def test_claim_tool_emits_exactly_one_json_document(db, sandbox):
     assert payload["success"] is True
 
 
+def test_task_tools_reject_non_numeric_ids():
+    result = subprocess.run(
+        ["bash", "tools/claim_task.sh", "1; SELECT 1", "1"],
+        cwd=ROOT, env=os.environ | {"AGENT_RUN_TOKEN": "test-token"}, text=True, capture_output=True,
+    )
+    assert result.returncode == 2
+    assert "must be numeric" in result.stderr
+
+
 def test_start_agent_run_requires_reserved_assigned_task(db, sandbox):
     identities = ids(db)
     task_id = create_task(db, sandbox["project_id"], identities["Coder"], "run invariant pytest task")

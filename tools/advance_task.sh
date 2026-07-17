@@ -12,6 +12,7 @@ export PGDATABASE="${PGDATABASE:-task_train}"
 TASK_ID="${1:?usage: advance_task.sh <task_id> <agent_id>}"
 AGENT_ID="${2:?}"
 : "${AGENT_RUN_TOKEN:?AGENT_RUN_TOKEN required}"
+[[ "$TASK_ID" =~ ^[0-9]+$ && "$AGENT_ID" =~ ^[0-9]+$ ]] || { printf 'Task and agent IDs must be numeric.\n' >&2; exit 2; }
 
 psql --no-psqlrc -A -t 2>/dev/null <<SQL
 SELECT json_build_object(

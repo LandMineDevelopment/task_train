@@ -16,6 +16,7 @@ DESCR="${4:?}"
 TYPE="${5:?}"
 BODY="${6:?}"
 : "${AGENT_RUN_TOKEN:?AGENT_RUN_TOKEN required}"
+[[ "$TASK_ID" =~ ^[0-9]+$ && "$AGENT_ID" =~ ^[0-9]+$ ]] || { printf 'Task and agent IDs must be numeric.\n' >&2; exit 2; }
 
 name_q="${NAME//\'/\'\'}"
 descr_q="${DESCR//\'/\'\'}"

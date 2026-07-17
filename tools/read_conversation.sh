@@ -11,6 +11,7 @@ export PGDATABASE="${PGDATABASE:-task_train}"
 
 CONV_ID="${1:?usage: read_conversation.sh <conversation_id>}"
 : "${AGENT_RUN_TOKEN:?AGENT_RUN_TOKEN required}"
+[[ "$CONV_ID" =~ ^[0-9]+$ ]] || { printf 'Conversation ID must be numeric.\n' >&2; exit 2; }
 
 psql --no-psqlrc -A -t 2>/dev/null <<SQL
 SELECT tagg.get_conversation_for_run('$AGENT_RUN_TOKEN', $CONV_ID)::text;

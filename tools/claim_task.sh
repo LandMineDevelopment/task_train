@@ -9,6 +9,7 @@ export PGDATABASE="${PGDATABASE:-task_train}"
 TASK_ID="${1:?usage: claim_task.sh <task_id> <agent_id>}"
 AGENT_ID="${2:?usage: claim_task.sh <task_id> <agent_id>}"
 : "${AGENT_RUN_TOKEN:?AGENT_RUN_TOKEN required}"
+[[ "$TASK_ID" =~ ^[0-9]+$ && "$AGENT_ID" =~ ^[0-9]+$ ]] || { printf 'Task and agent IDs must be numeric.\n' >&2; exit 2; }
 
 psql --no-psqlrc -A -t 2>/dev/null <<SQL
 SELECT tagg.claim_task_for_run('$AGENT_RUN_TOKEN', $TASK_ID)::text;

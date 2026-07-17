@@ -13,6 +13,7 @@ CONV_ID="${1:?usage: send_message.sh <conv_id> <from> <to> <message>}"
 FROM="${2:?}"
 TO="${3:?}"
 MSG="${4:?}"
+[[ "$CONV_ID" =~ ^[0-9]+$ && "$FROM" =~ ^[0-9]+$ && "$TO" =~ ^[0-9]+$ ]] || { printf 'Conversation and user IDs must be numeric.\n' >&2; exit 2; }
 
 msg_q="${MSG//\'/\'\'}"
 
