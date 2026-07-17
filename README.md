@@ -8,30 +8,30 @@ This is an experimental system, not a production-ready security boundary. It has
 
 ## Quick Start With Docker
 
-Docker Compose is the supported full environment. It includes PostgreSQL, Python with `psycopg`, `psql`, Git, Bash, and OpenCode. Docker is the only required local installation, plus credentials for the model provider.
+Docker Compose is the supported full environment. It includes PostgreSQL, Python with `psycopg`, `psql`, Git, Bash, and OpenCode. Apart from Git to clone the repository, Docker with the Compose plugin is the only required local software. A model-provider credential is required only before agents can answer messages.
 
 From a new clone:
 
 ```bash
 git clone https://github.com/LandMineDevelopment/task_train.git
 cd task_train
-./configure.sh
-docker compose up -d --build
-docker compose exec app bash tools/smoke_test.sh
+bash tools/setup_docker.sh
 ```
 
-Open the conversation browser at `http://localhost:3000`. The browser port is configurable with `--web-port`.
+`tools/setup_docker.sh` generates a local `.env`, builds the images, and starts the services. It needs no host PostgreSQL, Python, Node, OpenCode, or OpenSSL installation. Open the conversation browser at `http://localhost:3000`. The browser port is configurable with `--web-port`.
 
 To send messages from the browser, authenticate OpenCode first. The browser service shares the named OpenCode credential volumes with `app`:
 
 ```bash
-docker compose exec app opencode auth login
+bash tools/opencode_auth.sh
 ```
 
-`configure.sh` creates a local, Git-ignored `.env` file and generates a secure database password unless you provide one. It asks for the Compose project name, host database port, browser web port, database name, and database user. For automated setup:
+This is the only interactive setup step: OpenCode opens its provider login flow and stores credentials in named Docker volumes. Verify or repeat it at any time with the same command. For non-interactive providers, configure the provider credential using OpenCode's supported environment/configuration mechanism before starting Compose; credentials must never be committed to `.env` or the repository.
+
+`configure.sh` creates a local, Git-ignored `.env` file and generates a secure database password from `/dev/urandom` unless you provide one. `tools/setup_docker.sh` runs it non-interactively. To choose ports or database settings, pass the options through the Docker-first helper:
 
 ```bash
-./configure.sh --non-interactive --port 5434 --web-port 3000 --database task_train --user task_train
+bash tools/setup_docker.sh --port 5434 --web-port 3000 --database task_train --user task_train
 ```
 
 The Compose database uses port `5433` by default. If it is occupied, choose another port during configuration. The application container always connects internally to `db:5432`; use the selected host port only for DBeaver or other host tools.

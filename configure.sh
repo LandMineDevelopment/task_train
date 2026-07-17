@@ -55,7 +55,7 @@ if [[ "$INTERACTIVE" == true ]]; then
 fi
 
 if [[ -z "$PASSWORD" ]]; then
-    PASSWORD="$(openssl rand -base64 24 | tr -d '\n')"
+    PASSWORD="$(tr -dc 'A-Za-z0-9_@%+=.,/-' </dev/urandom | fold -w 32 | head -n 1)"
     printf 'Generated a database password. It is stored only in %s.\n' "$ENV_FILE"
 fi
 
