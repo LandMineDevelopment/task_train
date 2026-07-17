@@ -36,6 +36,32 @@ if [ "$SUCCESS" != "True" ]; then
   exit 0
 fi
 
+CONVERSATION_KIND=$(psql --no-psqlrc -A -t -c "SELECT kind FROM tagg.conversation WHERE id = $CONVERSATION_ID" 2>/dev/null | tr -d '[:space:]')
+if [ "$AGENT_NAME" = "Conductor" ] && [ "$CONVERSATION_KIND" = "user_conductor" ]; then
+  RESPONSE=$(opencode run \
+    --agent "$AGENT_NAME" \
+    --dir "$PROJECT_ROOT" \
+    "Read assigned task $TASK_ID and conversation $CONVERSATION_ID. Follow your database-backed system prompt and assigned skills. Return the final user-facing response on stdout.")
+  RESPONSE="${RESPONSE#${RESPONSE%%[![:space:]]*}}"
+  RESPONSE="${RESPONSE%${RESPONSE##*[![:space:]]}}"
+  if [ -z "$RESPONSE" ]; then
+    RESPONSE="The Conductor did not return a response."
+    STATUS="failed"
+  else
+    STATUS="complete"
+  fi
+  RESPONSE_SQL=$(printf "%s" "$RESPONSE" | sed "s/'/''/g")
+  RECIPIENT_ID=$(psql --no-psqlrc -A -t -c "SELECT owner_user_id FROM tagg.conversation WHERE id = $CONVERSATION_ID" 2>/dev/null | tr -d '[:space:]')
+  psql --no-psqlrc -v ON_ERROR_STOP=1 -q -c \
+    "SELECT tagg.append_conversation_message($CONVERSATION_ID, $AGENT_USER_ID, $RECIPIENT_ID, '$RESPONSE_SQL', 'assistant', '$STATUS');" >/dev/null
+  if [ "$STATUS" = "complete" ]; then
+    bash tools/advance_task.sh "$TASK_ID" "$AGENT_USER_ID" >/dev/null
+  else
+    bash tools/fail_task.sh "$TASK_ID" "$AGENT_USER_ID" "Conductor did not return a response" >/dev/null
+  fi
+  exit 0
+fi
+
 # 4. Invoke opencode — the agent reads instructions from the conversation
 opencode run \
   --agent "$AGENT_NAME" \

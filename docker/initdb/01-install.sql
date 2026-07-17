@@ -7,7 +7,9 @@
 \i /workspace/sql/role_agents.sql
 \i /workspace/sql/agent_config_db.sql
 \i /workspace/sql/conversation_gateway.sql
+\i /workspace/sql/browser_chat_workflow.sql
 \i /workspace/sql/hardening.sql
 \i /workspace/sql/workflow_hardening.sql
+\i /workspace/sql/conductor_workflow.sql
 \i /workspace/sql/generic_entities.sql
 \i /workspace/sql/documentation_comments.sql

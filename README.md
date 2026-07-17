@@ -22,6 +22,12 @@ docker compose exec app bash tools/smoke_test.sh
 
 Open the conversation browser at `http://localhost:3000`. The browser port is configurable with `--web-port`.
 
+To send messages from the browser, authenticate OpenCode first. The browser service shares the named OpenCode credential volumes with `app`:
+
+```bash
+docker compose exec app opencode auth login
+```
+
 `configure.sh` creates a local, Git-ignored `.env` file and generates a secure database password unless you provide one. It asks for the Compose project name, host database port, browser web port, database name, and database user. For automated setup:
 
 ```bash
@@ -78,9 +84,9 @@ The test suite covers schema bootstrap, roles and permissions, run tokens, task 
 
 ## Conversation Browser
 
-The `web` Compose service serves a React browser UI and FastAPI read API. It displays `user_conductor` conversations in a searchable left pane and the selected conversation's messages in the main pane. The service is published only on `127.0.0.1`, so it is available from the local browser but not directly from the network.
+The `web` Compose service serves a React browser UI and FastAPI chat API. It displays `user_conductor` conversations in a searchable left pane and the selected conversation's messages in the main pane. Select **New chat** to create a separate thread, then send messages from the composer. The service records the user message and queues a linked quick-workflow task for Conductor. The dedicated `supervisor` service creates the agent run, Conductor delegates specialist work through the normal task workflow, then its response is recorded in the original conversation. The service is published only on `127.0.0.1`, so it is available from the local browser but not directly from the network.
 
-The initial UI is deliberately read-only and has no authentication. Treat it as a local development tool; do not expose it through a reverse proxy or public network until authentication and authorization are implemented.
+The UI has no authentication and acts as the `local-user` database user. Treat it as a local development tool; do not expose it through a reverse proxy or public network until authentication and authorization are implemented.
 
 The browser polls every five seconds. It uses the same-origin endpoints below and never connects to PostgreSQL directly:
 
@@ -88,9 +94,11 @@ The browser polls every five seconds. It uses the same-origin endpoints below an
 GET /api/health
 GET /api/conversations?kind=user_conductor
 GET /api/conversations/{conversation_id}
+POST /api/conversations
+POST /api/conversations/{conversation_id}/messages
 ```
 
-`GET /api/conversations` returns list metadata, a last-message preview, and message count. The detail endpoint returns the conversation, chronological messages, sender/recipient metadata, and linked task IDs. API documentation is available locally at `http://localhost:3000/api/docs`.
+`GET /api/conversations` returns list metadata, a last-message preview, and message count. The detail endpoint returns the conversation, chronological messages, sender/recipient metadata, and linked task IDs. `POST /api/conversations` creates a new user-Conductor thread. Posting a message queues a linked quick-workflow task and returns its ID; the browser polling view displays the response when the workflow completes. API documentation is available locally at `http://localhost:3000/api/docs`.
 
 ## Native Install
 
@@ -107,7 +115,7 @@ The installer checks `psql`, OpenCode, and `psycopg`, initializes an empty datab
 ```text
 Browser user -- React conversation UI --> FastAPI web service
                                                    |
-                                                   | parameterized read queries
+                                                   | persist chat turn and queue linked task
                                                    v
 Terminal user -- tools/conductor_chat.sh -------> PostgreSQL
                                                    |
@@ -117,7 +125,7 @@ PostgreSQL: user <-> Conductor conversation
   |
   | Conductor creates task rows
   v
-tagg.agent_task -- NOTIFY tagg_task_ready --> db_supervisor.py
+tagg.agent_task -- NOTIFY tagg_task_ready --> supervisor service
                                               |
                                               | reserve task, create agent_run token
                                               v

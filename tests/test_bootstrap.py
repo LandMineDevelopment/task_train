@@ -22,3 +22,20 @@ def test_statuses_roles_and_notification(db):
     roles = {row[0] for row in db.execute("SELECT name FROM tagg.user WHERE is_agent AND is_active")}
     assert {"Conductor", "Coder", "Tester", "Explorer", "Reviewer", "Manager", "Admin-Agent"} <= roles
     assert db.execute("SELECT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'task_ready_notification')").fetchone()[0]
+
+
+def test_conductor_workflow_policy_is_database_backed(db):
+    conductor_id = db.execute("SELECT id FROM tagg.user WHERE name = 'Conductor'").fetchone()[0]
+    skills = {
+        row[0]
+        for row in db.execute(
+            """SELECT s.name FROM tagg.skill_user_crosswalk x
+               JOIN tagg.skill s ON s.id = x.skill_id
+               WHERE x.user_id = %s AND x.is_active AND s.is_active""",
+            (conductor_id,),
+        )
+    }
+    rendered = db.execute("SELECT tagg.render_agent_config(%s)", (conductor_id,)).fetchone()[0]
+    assert "conductor-workflow" in skills
+    assert "## Skill: conductor-workflow" in rendered
+    assert "create_task.sh" in rendered

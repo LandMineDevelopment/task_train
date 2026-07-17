@@ -147,10 +147,10 @@ def finish_agent_run(run_id: int, exit_code: int, stderr: bytes, db_conf: dict):
 
 
 def get_task_details(task_id: int, db_conf: dict) -> dict | None:
-    """Fetch from_user_id, to_user_id, task text, and project_id for a task."""
+    """Fetch task dispatch details, including an optional existing conversation."""
     rows = psql_query(
         f"SELECT row_to_json(t)::text FROM ("
-        f"  SELECT from_user_id, to_user_id, task, project_id"
+        f"  SELECT from_user_id, to_user_id, task, project_id, conversation_id"
         f"  FROM tagg.agent_task WHERE id = {task_id} AND is_active = true"
         f") t",
         db_conf,
@@ -164,6 +164,7 @@ def get_task_details(task_id: int, db_conf: dict) -> dict | None:
         "to_user_id": data["to_user_id"],
         "task_text": data["task"],
         "project_id": data["project_id"],
+        "conversation_id": data["conversation_id"],
     }
 
 
@@ -340,28 +341,31 @@ def main():
                     continue
                 agent = agent_map[uid]
 
-                # Get task details and write instruction to conversation
+                # Browser chat tasks already have a durable conversation. Other
+                # tasks receive the usual supervisor-generated instruction.
                 details = get_task_details(task_id, db_conf)
                 if details is None:
                     print(f"  [spawn] task={task_id} skipped: details unavailable")
                     continue
 
-                instruction = (
-                    f"Task #{task_id} assigned to you ({agent['name']}).\n\n"
-                    f"From: user #{details['from_user_id']}\n"
-                    f"To: {agent['name']} (id={uid})\n\n"
-                    f"Instructions:\n{details['task_text']}"
-                )
-
-                conv_id = send_instruction(
-                    db_conf,
-                    project_root,
-                    details["from_user_id"],
-                    uid,
-                    task_id,
-                    details["project_id"],
-                    instruction,
-                )
+                if details["conversation_id"] is not None:
+                    conv_id = str(details["conversation_id"])
+                else:
+                    instruction = (
+                        f"Task #{task_id} assigned to you ({agent['name']}).\n\n"
+                        f"From: user #{details['from_user_id']}\n"
+                        f"To: {agent['name']} (id={uid})\n\n"
+                        f"Instructions:\n{details['task_text']}"
+                    )
+                    conv_id = send_instruction(
+                        db_conf,
+                        project_root,
+                        details["from_user_id"],
+                        uid,
+                        task_id,
+                        details["project_id"],
+                        instruction,
+                    )
 
                 if conv_id is None:
                     print(f"  [spawn] WARNING: no conversation for task {task_id}, spawning without it")

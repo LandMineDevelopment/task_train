@@ -3,6 +3,7 @@ set -euo pipefail
 
 mkdir -p /home/app/.local/share/opencode /home/app/.config/opencode
 chown -R app:app /home/app/.local /home/app/.config
+rm -f /tmp/agents.container.json
 python3 - <<'PY'
 import json
 import os
@@ -19,4 +20,6 @@ config['db'] = {
 Path('/tmp/agents.container.json').write_text(json.dumps(config))
 PY
 chown app:app /tmp/agents.container.json
+psql --no-psqlrc -v ON_ERROR_STOP=1 -f /workspace/sql/browser_chat_workflow.sql >/dev/null
+psql --no-psqlrc -v ON_ERROR_STOP=1 -f /workspace/sql/conductor_workflow.sql >/dev/null
 exec runuser -u app -- "$@"

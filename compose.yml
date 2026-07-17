@@ -53,13 +53,35 @@ services:
       PGDATABASE: ${POSTGRES_DB:-task_train}
       PGUSER: ${POSTGRES_USER:-task_train}
       PGPASSWORD: ${POSTGRES_PASSWORD:?Run ./configure.sh before starting Docker Compose}
+      CHAT_PROJECT: default
+      CHAT_USER: local-user
+      CONDUCTOR_NAME: Conductor
     ports:
       - "127.0.0.1:${TASK_TRAIN_WEB_PORT:-3000}:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/health')"]
+      test: ["CMD", "python3", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/health')"]
       interval: 2s
       timeout: 3s
       retries: 20
+
+  supervisor:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-task_train}
+      PGUSER: ${POSTGRES_USER:-task_train}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Run ./configure.sh before starting Docker Compose}
+      SUPERVISOR_CONFIG: /tmp/agents.container.json
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - opencode_data:/home/app/.local/share/opencode
+      - opencode_config:/home/app/.config/opencode
+    command: ["python3", "-u", "supervisor/db_supervisor.py", "-c", "/tmp/agents.container.json"]
 
 volumes:
   task_train_data:

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import psycopg
 from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
@@ -12,6 +13,14 @@ from psycopg.rows import dict_row
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 app = FastAPI(title="Task Train API", docs_url="/api/docs", openapi_url="/api/openapi.json")
 app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+
+
+class NewConversation(BaseModel):
+    title: str | None = None
+
+
+class NewMessage(BaseModel):
+    message: str
 
 
 @contextmanager
@@ -28,6 +37,24 @@ def database():
         yield connection
     finally:
         connection.close()
+
+
+def chat_participants(connection):
+    project = connection.execute(
+        "SELECT id FROM tagg.project WHERE name = %s AND is_active",
+        (os.environ.get("CHAT_PROJECT", "default"),),
+    ).fetchone()
+    user = connection.execute(
+        "SELECT id FROM tagg.user WHERE name = %s AND is_active AND NOT is_agent",
+        (os.environ.get("CHAT_USER", "local-user"),),
+    ).fetchone()
+    conductor = connection.execute(
+        "SELECT id FROM tagg.user WHERE name = %s AND is_active AND is_agent",
+        (os.environ.get("CONDUCTOR_NAME", "Conductor"),),
+    ).fetchone()
+    if project is None or user is None or conductor is None:
+        raise HTTPException(status_code=503, detail="The local chat participants are not configured")
+    return project["id"], user["id"], conductor["id"]
 
 
 @app.get("/api/health")
@@ -102,6 +129,63 @@ def get_conversation(conversation_id: int):
             (conversation_id,),
         ).fetchall()
     return {"conversation": conversation, "messages": messages}
+
+
+@app.post("/api/conversations")
+def create_conversation(payload: NewConversation):
+    title = (payload.title or "Chat with Conductor").strip()
+    if not title or len(title) > 200:
+        raise HTTPException(status_code=422, detail="Title must contain between 1 and 200 characters")
+    with database() as connection:
+        project_id, user_id, conductor_id = chat_participants(connection)
+        conversation = connection.execute(
+            """
+            INSERT INTO tagg.conversation (title, original_theme, project_id, kind, owner_user_id, conductor_user_id)
+            VALUES (%s, 'user_conductor', %s, 'user_conductor', %s, %s)
+            RETURNING id
+            """,
+            (title, project_id, user_id, conductor_id),
+        ).fetchone()
+        connection.commit()
+    return {"conversation_id": conversation["id"]}
+
+
+@app.post("/api/conversations/{conversation_id}/messages")
+def create_message(conversation_id: int, payload: NewMessage):
+    message = payload.message.strip()
+    if not message or len(message) > 20000:
+        raise HTTPException(status_code=422, detail="Message must contain between 1 and 20,000 characters")
+    with database() as connection:
+        project_id, user_id, conductor_id = chat_participants(connection)
+        conversation = connection.execute(
+            """
+            SELECT id FROM tagg.conversation
+            WHERE id = %s AND is_active AND kind = 'user_conductor'
+              AND owner_user_id = %s AND conductor_user_id = %s
+            """,
+            (conversation_id, user_id, conductor_id),
+        ).fetchone()
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        user_message = connection.execute(
+            "SELECT tagg.append_conversation_message(%s, %s, %s, %s, 'user') AS id",
+            (conversation_id, user_id, conductor_id, message),
+        ).fetchone()
+        task = connection.execute(
+            """
+            INSERT INTO tagg.agent_task (from_user_id, to_user_id, task, project_id, workflow_id, conversation_id)
+            VALUES (%s, %s, 'Respond to the latest user message through the Conductor workflow.', %s,
+                    (SELECT id FROM tagg.workflow WHERE name = 'quick'), %s)
+            RETURNING id
+            """,
+            (user_id, conductor_id, project_id, conversation_id),
+        ).fetchone()
+        connection.execute(
+            "INSERT INTO tagg.message_agent_task_crosswalk (message_id, agent_task_id) VALUES (%s, %s)",
+            (user_message["id"], task["id"]),
+        )
+        connection.commit()
+    return {"task_id": task["id"], "status": "queued"}
 
 
 @app.get("/")

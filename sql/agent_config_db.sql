@@ -120,6 +120,7 @@ DECLARE
     v_mode      text;
     v_perms     jsonb;
     v_yaml_perms text := '';
+    v_skills     text := '';
     v_key       text;
     v_val       text;
     v_result    text;
@@ -144,14 +145,22 @@ BEGIN
         END LOOP;
     END IF;
 
-    -- Assemble full .md content
+    SELECT COALESCE(string_agg(
+        format('## Skill: %s\n%s', s.name, s.content), E'\n\n' ORDER BY s.name
+    ), '') INTO v_skills
+    FROM tagg.skill_user_crosswalk x
+    JOIN tagg.skill s ON s.id = x.skill_id
+    WHERE x.user_id = p_agent_id AND x.is_active AND s.is_active;
+
+    -- Assemble full .md content from prompt plus assigned skill policies.
     v_result := '---' || E'\n'
              || 'description: "' || v_descr || '"' || E'\n'
              || 'mode: ' || COALESCE(v_mode, 'subagent') || E'\n'
              || v_yaml_perms || E'\n'
              || '---' || E'\n'
              || E'\n'
-             || v_prompt;
+             || v_prompt
+             || CASE WHEN v_skills = '' THEN '' ELSE E'\n\n' || v_skills END;
 
     RETURN v_result;
 END;
