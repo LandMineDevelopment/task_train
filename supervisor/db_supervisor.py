@@ -160,7 +160,7 @@ def get_task_details(task_id: int, db_conf: dict) -> dict | None:
     """Fetch task dispatch details, including an optional existing conversation."""
     rows = psql_query(
         f"SELECT row_to_json(t)::text FROM ("
-        f"  SELECT task.from_user_id, task.to_user_id, task.task, task.project_id, task.conversation_id, conversation.kind AS conversation_kind"
+        f"  SELECT task.from_user_id, task.to_user_id, task.task, task.project_id, task.conversation_id, task.source_message_id, conversation.kind AS conversation_kind"
         f"  FROM tagg.agent_task task LEFT JOIN tagg.conversation conversation ON conversation.id = task.conversation_id"
         f"  WHERE task.id = {task_id} AND task.is_active = true"
         f") t",
@@ -176,6 +176,7 @@ def get_task_details(task_id: int, db_conf: dict) -> dict | None:
         "task_text": data["task"],
         "project_id": data["project_id"],
         "conversation_id": data["conversation_id"],
+        "source_message_id": data["source_message_id"],
         "conversation_kind": data["conversation_kind"],
     }
 
@@ -398,6 +399,7 @@ def main():
                 env["AGENT_NAME"] = agent["name"]
                 env["CONVERSATION_ID"] = conv_id
                 env["CONVERSATION_KIND"] = details["conversation_kind"] or "agent_agent"
+                env["SOURCE_MESSAGE_ID"] = str(details["source_message_id"] or "")
                 env["AGENT_RUN_TOKEN"] = run_token
                 env["PGHOST"] = db_conf["host"]
                 env["PGPORT"] = str(db_conf["port"])

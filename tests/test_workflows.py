@@ -150,6 +150,31 @@ def test_clean_worker_exit_without_completion_requeues_task(db, sandbox):
     assert db.execute("SELECT task_status_id FROM tagg.agent_task WHERE id = %s", (task_id,)).fetchone()[0] == 1
 
 
+def test_browser_tasks_bind_source_messages_and_serialize_conductor_work(db, sandbox):
+    conductor = ids(db)["Conductor"]
+    conversation = db.execute(
+        "SELECT tagg.get_or_create_user_conductor_conversation(%s, %s, %s)",
+        (sandbox["project_id"], sandbox["user_id"], conductor),
+    ).fetchone()[0]
+    first_task = db.execute(
+        "SELECT tagg.queue_browser_message(%s, %s, %s, %s, 'first request')",
+        (conversation, sandbox["project_id"], sandbox["user_id"], conductor),
+    ).fetchone()[0]
+    second_task = db.execute(
+        "SELECT tagg.queue_browser_message(%s, %s, %s, %s, 'second request')",
+        (conversation, sandbox["project_id"], sandbox["user_id"], conductor),
+    ).fetchone()[0]
+    source_ids = db.execute(
+        "SELECT source_message_id FROM tagg.agent_task WHERE id IN (%s, %s) ORDER BY id",
+        (first_task, second_task),
+    ).fetchall()
+    assert source_ids[0][0] != source_ids[1][0]
+    assert db.execute("SELECT tagg.reserve_task(%s)", (first_task,)).fetchone()[0]
+    assert not db.execute("SELECT tagg.reserve_task(%s)", (second_task,)).fetchone()[0]
+    db.execute("UPDATE tagg.agent_task SET task_status_id = 4 WHERE id = %s", (first_task,))
+    assert db.execute("SELECT tagg.reserve_task(%s)", (second_task,)).fetchone()[0]
+
+
 def test_delegated_task_reports_progress_to_user_conversation(db, sandbox):
     identities = ids(db)
     conductor = identities["Conductor"]

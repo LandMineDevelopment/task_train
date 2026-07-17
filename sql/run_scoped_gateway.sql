@@ -45,13 +45,17 @@ $function$;
 
 CREATE OR REPLACE FUNCTION tagg.append_message_for_run(p_token text, p_message text, p_status text DEFAULT 'complete')
 RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
-DECLARE v_run tagg.agent_run%ROWTYPE; v_owner bigint; v_message_id bigint;
+DECLARE v_run tagg.agent_run%ROWTYPE; v_owner bigint; v_message_id bigint; v_source_message_id bigint;
 BEGIN
     SELECT * INTO v_run FROM tagg.agent_run WHERE token_hash = md5(p_token) AND status = 'running' AND expires_at > CURRENT_TIMESTAMP;
     IF NOT FOUND OR v_run.conversation_id IS NULL THEN RAISE EXCEPTION 'Run has no active conversation'; END IF;
     SELECT owner_user_id INTO v_owner FROM tagg.conversation WHERE id = v_run.conversation_id AND is_active;
     IF v_owner IS NULL THEN RAISE EXCEPTION 'Conversation is unavailable'; END IF;
     v_message_id := tagg.append_conversation_message(v_run.conversation_id, v_run.agent_user_id, v_owner, p_message, 'assistant', p_status);
+    SELECT source_message_id INTO v_source_message_id FROM tagg.agent_task WHERE id = v_run.task_id;
+    IF v_source_message_id IS NOT NULL THEN
+        UPDATE tagg.message SET parent_id = v_source_message_id WHERE id = v_message_id;
+    END IF;
     PERFORM tagg.set_run_audit_context(p_token);
     PERFORM tagg.log_operation('message', v_message_id, 'run_append');
     RETURN v_message_id;

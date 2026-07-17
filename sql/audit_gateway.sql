@@ -140,9 +140,9 @@ BEGIN
         RAISE EXCEPTION 'Conversation not found';
     END IF;
     v_message_id := tagg.append_conversation_message(p_conversation_id, p_user_id, p_conductor_id, p_message, 'user');
-    INSERT INTO tagg.agent_task(from_user_id, to_user_id, task, project_id, workflow_id, conversation_id)
+    INSERT INTO tagg.agent_task(from_user_id, to_user_id, task, project_id, workflow_id, conversation_id, source_message_id)
     VALUES (p_user_id, p_conductor_id, 'Respond to the latest user message through the Conductor workflow.', p_project_id,
-            (SELECT id FROM tagg.workflow WHERE name = 'quick'), p_conversation_id)
+            (SELECT id FROM tagg.workflow WHERE name = 'quick'), p_conversation_id, v_message_id)
     RETURNING id INTO v_task_id;
     INSERT INTO tagg.message_agent_task_crosswalk(message_id, agent_task_id) VALUES (v_message_id, v_task_id);
     PERFORM tagg.log_operation('message', v_message_id, 'browser_send');

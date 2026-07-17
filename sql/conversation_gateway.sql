@@ -173,7 +173,14 @@ BEGIN
     SET task_status_id = 2
     WHERE id = p_task_id
       AND task_status_id = 1
-      AND is_active = true;
+      AND is_active = true
+      AND NOT EXISTS (
+          SELECT 1 FROM tagg.agent_task active
+          WHERE active.conversation_id = tagg.agent_task.conversation_id
+            AND active.to_user_id = tagg.agent_task.to_user_id
+            AND active.id <> tagg.agent_task.id
+            AND active.task_status_id IN (2, 3)
+      );
     RETURN FOUND;
 END;
 $function$;
