@@ -3,6 +3,31 @@ SET search_path TO tagg, pg_catalog, pg_temp;
 
 ALTER TABLE tagg.agent_run ADD COLUMN IF NOT EXISTS heartbeat_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
+CREATE OR REPLACE FUNCTION tagg.start_agent_run(p_task bigint, p_agent bigint, p_token text, p_conversation bigint DEFAULT NULL)
+RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
+DECLARE v_id bigint; v_task_conversation bigint;
+BEGIN
+    IF length(p_token) < 32 THEN RAISE EXCEPTION 'Run token is too short'; END IF;
+    SELECT conversation_id INTO v_task_conversation FROM tagg.agent_task
+    WHERE id = p_task AND to_user_id = p_agent AND task_status_id = 2 AND is_active FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Task % is not reserved for agent %', p_task, p_agent; END IF;
+    IF EXISTS (SELECT 1 FROM tagg.agent_run WHERE task_id = p_task AND status = 'running') THEN
+        RAISE EXCEPTION 'Task % already has an active run', p_task;
+    END IF;
+    IF v_task_conversation IS NOT NULL AND p_conversation IS DISTINCT FROM v_task_conversation THEN
+        RAISE EXCEPTION 'Run conversation does not match task conversation';
+    END IF;
+    IF p_conversation IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tagg.conversation WHERE id = p_conversation AND is_active) THEN
+        RAISE EXCEPTION 'Conversation % is not active', p_conversation;
+    END IF;
+    UPDATE tagg.agent_task SET conversation_id = COALESCE(conversation_id, p_conversation), updated = CURRENT_TIMESTAMP WHERE id = p_task;
+    INSERT INTO tagg.agent_run(task_id, agent_user_id, conversation_id, token_hash, heartbeat_at)
+    VALUES (p_task, p_agent, p_conversation, md5(p_token), CURRENT_TIMESTAMP) RETURNING id INTO v_id;
+    PERFORM tagg.log_operation('agent_run', v_id, 'start');
+    RETURN v_id;
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION tagg.heartbeat_agent_run(p_token text)
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
 BEGIN

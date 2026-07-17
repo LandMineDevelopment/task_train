@@ -2,6 +2,8 @@ import json
 import os
 import subprocess
 
+import pytest
+
 from conftest import ROOT
 
 
@@ -19,6 +21,7 @@ def create_task(db, project_id, assignee_id, text):
 
 
 def start_run(db, task_id, agent_id, token):
+    db.execute("SELECT tagg.reserve_task(%s)", (task_id,))
     return db.execute("SELECT tagg.start_agent_run(%s, %s, %s)", (task_id, agent_id, token)).fetchone()[0]
 
 
@@ -49,6 +52,21 @@ def test_claim_tool_emits_exactly_one_json_document(db, sandbox):
     )
     payload = json.loads(result.stdout)
     assert payload["success"] is True
+
+
+def test_start_agent_run_requires_reserved_assigned_task(db, sandbox):
+    identities = ids(db)
+    task_id = create_task(db, sandbox["project_id"], identities["Coder"], "run invariant pytest task")
+    token = f"run-{sandbox['suffix']}-abcdefghijklmnopqrstuvwxyz"
+    with pytest.raises(Exception, match="not reserved"):
+        db.execute("SELECT tagg.start_agent_run(%s, %s, %s)", (task_id, identities["Coder"], token))
+    assert db.execute("SELECT tagg.reserve_task(%s)", (task_id,)).fetchone()[0]
+    with pytest.raises(Exception, match="not reserved"):
+        db.execute("SELECT tagg.start_agent_run(%s, %s, %s)", (task_id, identities["Conductor"], token))
+    run_id = db.execute("SELECT tagg.start_agent_run(%s, %s, %s)", (task_id, identities["Coder"], token)).fetchone()[0]
+    assert run_id
+    with pytest.raises(Exception, match="already has an active run"):
+        db.execute("SELECT tagg.start_agent_run(%s, %s, %s)", (task_id, identities["Coder"], f"second-{token}"))
 
 
 def test_gateway_operations_and_errors_are_audited(db, sandbox):
