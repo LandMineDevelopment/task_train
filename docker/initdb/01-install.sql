@@ -11,5 +11,6 @@
 \i /workspace/sql/hardening.sql
 \i /workspace/sql/workflow_hardening.sql
 \i /workspace/sql/conductor_workflow.sql
+\i /workspace/sql/conversation_progress.sql
 \i /workspace/sql/generic_entities.sql
 \i /workspace/sql/documentation_comments.sql

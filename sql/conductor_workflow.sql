@@ -5,7 +5,7 @@ SELECT pg_advisory_lock(742017);
 INSERT INTO tagg.skill (name, descr, content) VALUES
   ('conductor-workflow',
    'Delegate user goals through the Task Train workflow.',
-   'For every user request, work through the assigned task and its linked conversation. Decompose the goal into concrete specialist tasks and create those tasks with bash tools/create_task.sh. Assign implementation to Coder, testing to Tester, research to Explorer, and review to Reviewer as appropriate. Do not implement, test, research, or review work yourself. Report the tasks you created and their workflow status. For user-Conductor chat tasks, do not call send_message.sh or advance_task.sh: the runtime persists your final stdout reply and completes the chat dispatch task.')
+   'For every user request, work through the assigned task and its linked conversation. Decompose the goal into concrete specialist tasks and create those tasks with bash tools/create_task.sh. Assign implementation to Coder, testing to Tester, research to Explorer, and review to Reviewer as appropriate. Do not implement, test, research, or review work yourself. Report the tasks you created and their workflow status. Delegated tasks inherit the user conversation and the system automatically posts start, completion, failure, and cancellation updates. For user-Conductor chat tasks, do not call send_message.sh or advance_task.sh: the runtime persists your final stdout reply and completes the chat dispatch task.')
 ON CONFLICT (name) DO UPDATE
 SET descr = EXCLUDED.descr, content = EXCLUDED.content, is_active = true;
 
@@ -16,8 +16,19 @@ JOIN tagg.skill s ON s.name = 'conductor-workflow'
 WHERE u.name = 'Conductor'
 ON CONFLICT (skill_id, user_id) DO UPDATE SET is_active = true;
 
+INSERT INTO tagg.skill_permission_crosswalk (skill_id, permission_id)
+SELECT s.id, p.id
+FROM tagg.skill s
+JOIN tagg.permission p ON p.name IN ('task:claim', 'task:advance', 'task:fail')
+WHERE s.name = 'conductor-workflow'
+ON CONFLICT (skill_id, permission_id) DO UPDATE SET is_active = true;
+
 UPDATE tagg.user
 SET prompt = 'You are the Conductor, the orchestrator for Task Train. Follow your assigned skills as the operating policy. You coordinate work through the task workflow and do not perform specialist work yourself. Read the assigned task and conversation, then give the user a concise progress report grounded in the tasks you delegated.'
+WHERE name = 'Conductor' AND is_active = true;
+
+UPDATE tagg.user
+SET opencode_config = jsonb_set(opencode_config, '{mode}', '"primary"'::jsonb)
 WHERE name = 'Conductor' AND is_active = true;
 
 CREATE OR REPLACE FUNCTION tagg.render_agent_config(p_agent_id bigint)
@@ -58,7 +69,7 @@ BEGIN
     END IF;
 
     SELECT COALESCE(string_agg(
-        format('## Skill: %s\n%s', s.name, s.content), E'\n\n' ORDER BY s.name
+        format(E'## Skill: %s\n%s', s.name, s.content), E'\n\n' ORDER BY s.name
     ), '') INTO v_skills
     FROM tagg.skill_user_crosswalk x
     JOIN tagg.skill s ON s.id = x.skill_id

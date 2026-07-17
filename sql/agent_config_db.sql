@@ -22,7 +22,7 @@ COMMENT ON COLUMN tagg.user.opencode_config IS
 -- Each config matches the current agents/*.md frontmatter
 
 UPDATE tagg.user SET opencode_config = '{
-    "mode": "subagent",
+    "mode": "primary",
     "permissions": {
         "bash": "allow", "read": "allow", "edit": "deny",
         "glob": "allow", "grep": "allow",
@@ -146,7 +146,7 @@ BEGIN
     END IF;
 
     SELECT COALESCE(string_agg(
-        format('## Skill: %s\n%s', s.name, s.content), E'\n\n' ORDER BY s.name
+        format(E'## Skill: %s\n%s', s.name, s.content), E'\n\n' ORDER BY s.name
     ), '') INTO v_skills
     FROM tagg.skill_user_crosswalk x
     JOIN tagg.skill s ON s.id = x.skill_id

@@ -119,7 +119,16 @@ def get_conversation(conversation_id: int):
                        (SELECT jsonb_agg(x.agent_task_id ORDER BY x.agent_task_id)
                         FROM tagg.message_agent_task_crosswalk x WHERE x.message_id = m.id),
                        '[]'::jsonb
-                   ) AS task_ids
+                   ) AS task_ids,
+                   COALESCE(
+                       (SELECT jsonb_agg(jsonb_build_object('id', x.agent_task_id, 'status', status.name)
+                                         ORDER BY x.agent_task_id)
+                        FROM tagg.message_agent_task_crosswalk x
+                        JOIN tagg.agent_task task ON task.id = x.agent_task_id
+                        JOIN tagg.task_status status ON status.id = task.task_status_id
+                        WHERE x.message_id = m.id),
+                       '[]'::jsonb
+                   ) AS task_states
             FROM tagg.message m
             JOIN tagg.user sender ON sender.id = m.from_user
             JOIN tagg.user recipient ON recipient.id = m.to_user

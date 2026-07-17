@@ -38,17 +38,20 @@ fi
 
 CONVERSATION_KIND=$(psql --no-psqlrc -A -t -c "SELECT kind FROM tagg.conversation WHERE id = $CONVERSATION_ID" 2>/dev/null | tr -d '[:space:]')
 if [ "$AGENT_NAME" = "Conductor" ] && [ "$CONVERSATION_KIND" = "user_conductor" ]; then
-  RESPONSE=$(opencode run \
-    --agent "$AGENT_NAME" \
-    --dir "$PROJECT_ROOT" \
-    "Read assigned task $TASK_ID and conversation $CONVERSATION_ID. Follow your database-backed system prompt and assigned skills. Return the final user-facing response on stdout.")
+  if RESPONSE=$(opencode run \
+      --agent "$AGENT_NAME" \
+      --dir "$PROJECT_ROOT" \
+      "Read assigned task $TASK_ID and conversation $CONVERSATION_ID. Follow your database-backed system prompt and assigned skills. Return the final user-facing response on stdout."); then
+    STATUS="complete"
+  else
+    RESPONSE="The Conductor could not respond. Check OpenCode authentication and try again."
+    STATUS="failed"
+  fi
   RESPONSE="${RESPONSE#${RESPONSE%%[![:space:]]*}}"
   RESPONSE="${RESPONSE%${RESPONSE##*[![:space:]]}}"
   if [ -z "$RESPONSE" ]; then
     RESPONSE="The Conductor did not return a response."
     STATUS="failed"
-  else
-    STATUS="complete"
   fi
   RESPONSE_SQL=$(printf "%s" "$RESPONSE" | sed "s/'/''/g")
   RECIPIENT_ID=$(psql --no-psqlrc -A -t -c "SELECT owner_user_id FROM tagg.conversation WHERE id = $CONVERSATION_ID" 2>/dev/null | tr -d '[:space:]')

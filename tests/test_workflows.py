@@ -49,3 +49,37 @@ def test_claim_tool_emits_exactly_one_json_document(db, sandbox):
     )
     payload = json.loads(result.stdout)
     assert payload["success"] is True
+
+
+def test_delegated_task_reports_progress_to_user_conversation(db, sandbox):
+    identities = ids(db)
+    conductor = identities["Conductor"]
+    coder = identities["Coder"]
+    quick_workflow = db.execute("SELECT id FROM tagg.workflow WHERE name = 'quick'").fetchone()[0]
+    conversation = db.execute(
+        "SELECT tagg.get_or_create_user_conductor_conversation(%s, %s, %s)",
+        (sandbox["project_id"], sandbox["user_id"], conductor),
+    ).fetchone()[0]
+    chat_task = db.execute(
+        """INSERT INTO tagg.agent_task(from_user_id, to_user_id, task, project_id, workflow_id, conversation_id)
+           VALUES (%s, %s, 'chat dispatch', %s, %s, %s) RETURNING id""",
+        (sandbox["user_id"], conductor, sandbox["project_id"], quick_workflow, conversation),
+    ).fetchone()[0]
+    token = f"conversation-{sandbox['suffix']}-abcdefghijklmnopqrstuvwxyz"
+    assert db.execute("SELECT tagg.reserve_task(%s)", (chat_task,)).fetchone()[0]
+    db.execute("SELECT tagg.start_agent_run(%s, %s, %s, %s)", (chat_task, conductor, token, conversation))
+    db.execute("SELECT tagg.set_agent_run_context(%s)", (token,))
+    delegated_task = db.execute(
+        "SELECT tagg.agent_task_add(%s, %s, 'implement feature', %s)",
+        (conductor, coder, sandbox["project_id"]),
+    ).fetchone()[0]
+    assert db.execute("SELECT conversation_id FROM tagg.agent_task WHERE id = %s", (delegated_task,)).fetchone()[0] == conversation
+    db.execute("UPDATE tagg.agent_task SET task_status_id = 3 WHERE id = %s", (delegated_task,))
+    db.execute("UPDATE tagg.agent_task SET task_status_id = 4 WHERE id = %s", (delegated_task,))
+    updates = [
+        row[0] for row in db.execute(
+            "SELECT message FROM tagg.message WHERE conversation_id = %s ORDER BY id", (conversation,)
+        )
+    ]
+    assert any(f"Coder started task #{delegated_task}" in message for message in updates)
+    assert any(f"Coder completed task #{delegated_task}" in message for message in updates)

@@ -8,7 +8,8 @@ RUN apt-get update \
     && python3 -m pip install --break-system-packages "psycopg[binary]>=3.3,<4" -r /tmp/requirements-dev.txt \
     && npm install --global opencode-ai@1.18.3
 
-RUN useradd --create-home --shell /bin/bash app
+RUN usermod --login app --home /home/app --move-home node \
+    && groupmod --new-name app node
 COPY --chmod=755 docker/app-entrypoint.sh /usr/local/bin/app-entrypoint
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/app-entrypoint"]

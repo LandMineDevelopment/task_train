@@ -10,6 +10,7 @@ type Conversation = {
 type Message = {
   id: number; message: string; role: string; status: string; created: string;
   sender_name: string; sender_is_agent: boolean; recipient_name: string; task_ids: number[];
+  task_states: { id: number; status: string }[];
 };
 type Detail = { conversation: Conversation; messages: Message[] };
 
@@ -23,6 +24,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 function formatTime(value: string | null) {
   return value ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value)) : "No messages";
+}
+
+function taskProgress(taskStates: Message["task_states"]) {
+  if (taskStates.some((task) => task.status === "in_progress" || task.status === "reserved")) return "responding";
+  if (taskStates.some((task) => task.status === "pending")) return "queued";
+  if (taskStates.some((task) => task.status === "failed")) return "failed";
+  return null;
 }
 
 function App() {
@@ -76,7 +84,7 @@ function App() {
     <section className="thread">
       {detail.data ? <>
         <header className="thread-header"><div><p className="eyebrow">{detail.data.conversation.project_name}</p><h2>{detail.data.conversation.title}</h2><p className="subtle">{detail.data.conversation.owner_name ?? "User"} ↔ {detail.data.conversation.conductor_name ?? "Conductor"}</p></div><span className="count">{detail.data.messages.length} messages</span></header>
-        <div className="messages">{detail.data.messages.map((message) => <article key={message.id} className={`message ${message.sender_is_agent ? "agent" : "human"}`}><div className="message-meta"><strong>{message.sender_name}</strong><time>{formatTime(message.created)}</time></div><p>{message.message}</p>{message.task_ids.length > 0 && <span className="task-link">Tasks #{message.task_ids.join(", #")}</span>}</article>)}{detail.data.messages.length === 0 && <p className="empty">Start this conversation with the Conductor.</p>}</div>
+        <div className="messages">{detail.data.messages.map((message) => <article key={message.id} className={`message ${message.sender_is_agent ? "agent" : "human"}`}><div className="message-meta"><strong>{message.sender_name}</strong><time>{formatTime(message.created)}</time></div><p>{message.message}</p>{message.task_ids.length > 0 && <span className="task-link">Tasks #{message.task_ids.join(", #")}</span>}{taskProgress(message.task_states) === "queued" && <span className="conductor-status queued">Message queued for Conductor</span>}{taskProgress(message.task_states) === "responding" && <span className="conductor-status responding"><i />Conductor has seen your message and is responding</span>}{taskProgress(message.task_states) === "failed" && <span className="conductor-status failed">Conductor could not respond. Check OpenCode authentication.</span>}</article>)}{detail.data.messages.length === 0 && <p className="empty">Start this conversation with the Conductor.</p>}</div>
         <form className="composer" onSubmit={submitMessage}><textarea aria-label="Message Conductor" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleComposerKeyDown} placeholder="Tell the Conductor what you need..." disabled={sendMessage.isPending} /><div><span>{sendMessage.isPending ? "Queueing workflow..." : "Enter to send · Shift+Enter for a new line."}</span><button type="submit" disabled={!draft.trim() || sendMessage.isPending}>{sendMessage.isPending ? "Sending..." : "Send"}</button></div>{sendMessage.isError && <p className="form-error">The message could not be queued. Check the local services and try again.</p>}</form>
       </> : <div className="empty-state">{detail.isLoading ? "Loading conversation..." : "Select a conversation to read it."}</div>}
     </section>
