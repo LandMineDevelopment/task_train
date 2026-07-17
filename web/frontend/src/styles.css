@@ -16,3 +16,15 @@ input, textarea { width: 100%; border: 1px solid #334363; border-radius: 9px; ba
 .code-block pre { margin: 0; padding: 10px 0; font: .82rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; tab-size: 2; }
 .code-line { display: grid; grid-template-columns: 3em max-content; min-width: 100%; white-space: pre; }
 .line-number { padding-right: 10px; color: #59708e; text-align: right; user-select: none; }
+.artifact-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.artifact-heading strong { color: #d4f9e4; font: 600 .76rem ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; }
+.artifact-description { padding: 10px 14px 0; color: #b5c8d2; font-size: .82rem; }
+.task-activity { margin-top: 4px; border: 1px solid #2a5f69; border-radius: 8px; background: #102d39; color: #c3d7e1; font-size: .82rem; }
+.task-activity summary { display: flex; align-items: center; gap: 9px; padding: 9px 11px; cursor: pointer; list-style: none; }
+.task-activity summary::-webkit-details-marker { display: none; }
+.task-activity summary::before { content: "+"; color: #75e6b2; font-size: 1rem; }
+.task-activity[open] summary::before { content: "-"; }
+.task-activity summary > span { color: #8eb8ca; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.task-activity summary > em { margin-left: auto; font-style: normal; }
+.task-activity > p { padding: 0 12px 11px 31px; color: #9db2cc; white-space: pre-wrap; }
+.task-state { color: #9db2cc; }.task-state.completed { color: #75e6b2; }.task-state.failed, .task-state.cancelled { color: #ff9d9d; }

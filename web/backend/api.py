@@ -75,7 +75,7 @@ def list_conversations(kind: str = Query("user_conductor", pattern="^(user_condu
             """
             SELECT c.id, c.title, c.kind, c.updated, p.name AS project_name,
                    owner.name AS owner_name, conductor.name AS conductor_name,
-                   COALESCE(last_message.message, '') AS last_message,
+                   left(regexp_replace(COALESCE(last_message.message, ''), '\\s+', ' ', 'g'), 180) AS last_message,
                    last_message.created AS last_message_at,
                    COUNT(m.id) AS message_count
             FROM tagg.conversation c
@@ -141,7 +141,29 @@ def get_conversation(conversation_id: int):
             """,
             (conversation_id,),
         ).fetchall()
-    return {"conversation": conversation, "messages": messages}
+        tasks = connection.execute(
+            """
+            SELECT task.id, task.task, status.name AS status, assignee.name AS assignee_name,
+                   COALESCE(
+                       jsonb_agg(
+                           jsonb_build_object(
+                               'id', artifact.id, 'name', artifact.name, 'description', artifact.descr,
+                               'type', artifact.artifact_type, 'body', artifact.body
+                           ) ORDER BY artifact.id
+                       ) FILTER (WHERE artifact.id IS NOT NULL),
+                       '[]'::jsonb
+                   ) AS artifacts
+            FROM tagg.agent_task task
+            JOIN tagg.task_status status ON status.id = task.task_status_id
+            JOIN tagg.user assignee ON assignee.id = task.to_user_id
+            LEFT JOIN tagg.artifact artifact ON artifact.agent_task_id = task.id
+            WHERE task.conversation_id = %s
+            GROUP BY task.id, status.name, assignee.name
+            ORDER BY task.id
+            """,
+            (conversation_id,),
+        ).fetchall()
+    return {"conversation": conversation, "messages": messages, "tasks": tasks}
 
 
 @app.post("/api/conversations")

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
-import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -12,7 +12,9 @@ type Message = {
   sender_name: string; sender_is_agent: boolean; recipient_name: string; task_ids: number[];
   task_states: { id: number; status: string }[];
 };
-type Detail = { conversation: Conversation; messages: Message[] };
+type Artifact = { id: number; name: string; description: string; type: string; body: string | null };
+type Task = { id: number; task: string; status: string; assignee_name: string; artifacts: Artifact[] };
+type Detail = { conversation: Conversation; messages: Message[]; tasks: Task[] };
 
 const client = new QueryClient();
 
@@ -42,7 +44,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
 }
 
 function FormattedContent({ content }: { content: string }) {
-  const blocks: React.ReactNode[] = [];
+  const blocks: ReactNode[] = [];
   const fencedCode = /```([^\n`]*)\n?([\s\S]*?)```/g;
   let cursor = 0;
   for (const match of content.matchAll(fencedCode)) {
@@ -56,16 +58,37 @@ function FormattedContent({ content }: { content: string }) {
   return <>{blocks}</>;
 }
 
-function MessageContent({ content }: { content: string }) {
+function isCodeArtifact(artifact: Artifact) {
+  return artifact.type === "code" || /\.(py|js|ts|tsx|jsx|json|sql|sh|yaml|yml|md)$/i.test(artifact.name);
+}
+
+function ArtifactOutput({ artifact }: { artifact: Artifact }) {
+  const body = artifact.body ?? "";
+  const content = body.includes("\n") ? body : body.replaceAll("\\n", "\n");
+  return <section className="artifact-output">
+    <div className="artifact-heading"><span>{artifact.type.replaceAll("-", " ")}</span><strong>{artifact.name}</strong></div>
+    <p className="artifact-description">{artifact.description}</p>
+    {isCodeArtifact(artifact) ? <CodeBlock language={artifact.name.split(".").at(-1) ?? ""} code={content} /> : <FormattedContent content={content} />}
+  </section>;
+}
+
+function TaskActivity({ task, action }: { task: Task; action: string }) {
+  return <details className="task-activity">
+    <summary><span>Task #{task.id}</span><strong>{task.assignee_name} {action}</strong><em className={`task-state ${task.status}`}>{task.status}</em></summary>
+    <p>{task.task}</p>
+  </details>;
+}
+
+function MessageContent({ content, tasks }: { content: string; tasks: Task[] }) {
   const marker = "\n\nArtifact:\n";
   const artifactStart = content.indexOf(marker);
-  if (artifactStart === -1) return <FormattedContent content={content} />;
+  const task = tasks.find((candidate) => content.includes(`task #${candidate.id}`));
+  const lifecycle = content.match(/\b(started|completed|failed|cancelled) task #\d+:/);
+  const summary = artifactStart === -1 ? content : content.slice(0, artifactStart);
   return <>
-    <FormattedContent content={content.slice(0, artifactStart)} />
-    <section className="artifact-output">
-      <div className="artifact-heading">Artifact output</div>
-      <FormattedContent content={content.slice(artifactStart + marker.length)} />
-    </section>
+    {task && lifecycle ? <TaskActivity task={task} action={lifecycle[1]} /> : <FormattedContent content={summary} />}
+    {artifactStart !== -1 && task?.artifacts.map((artifact) => <ArtifactOutput key={artifact.id} artifact={artifact} />)}
+    {artifactStart !== -1 && !task?.artifacts.length && <section className="artifact-output"><div className="artifact-heading">Artifact output</div><FormattedContent content={content.slice(artifactStart + marker.length)} /></section>}
   </>;
 }
 
@@ -150,7 +173,7 @@ function App() {
     <section className="thread">
       {detail.data ? <>
         <header className="thread-header"><div><p className="eyebrow">{detail.data.conversation.project_name}</p>{editingTitle ? <form className="rename-form" onSubmit={submitRename}><input aria-label="Conversation title" value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} autoFocus /><button type="submit" disabled={renameConversation.isPending}>Save</button><button type="button" onClick={() => setEditingTitle(false)}>Cancel</button></form> : <div className="title-row"><h2>{detail.data.conversation.title}</h2><button className="rename-button" onClick={() => { setTitleDraft(detail.data.conversation.title); setEditingTitle(true); }}>Rename</button></div>}<p className="subtle">{detail.data.conversation.owner_name ?? "User"} ↔ {detail.data.conversation.conductor_name ?? "Conductor"}</p></div><span className="count">{detail.data.messages.length} messages</span></header>
-        <div className="messages" ref={messagesRef}>{detail.data.messages.map((message) => <article key={message.id} className={`message ${message.sender_is_agent ? "agent" : "human"}`}><div className="message-meta"><strong>{message.sender_name}</strong><time>{formatTime(message.created)}</time></div><MessageContent content={message.message} />{message.task_ids.length > 0 && <span className="task-link">Tasks #{message.task_ids.join(", #")}</span>}{taskProgress(message.task_states) === "queued" && <span className="conductor-status queued">Message queued for Conductor</span>}{taskProgress(message.task_states) === "responding" && <span className="conductor-status responding"><i />Conductor has seen your message and is responding</span>}{taskProgress(message.task_states) === "failed" && <span className="conductor-status failed">Conductor could not respond. Check OpenCode authentication.</span>}</article>)}{detail.data.messages.length === 0 && <p className="empty">Start this conversation with the Conductor.</p>}</div>
+        <div className="messages" ref={messagesRef}>{detail.data.messages.map((message) => <article key={message.id} className={`message ${message.sender_is_agent ? "agent" : "human"}`}><div className="message-meta"><strong>{message.sender_name}</strong><time>{formatTime(message.created)}</time></div><MessageContent content={message.message} tasks={detail.data.tasks} />{message.task_ids.length > 0 && <span className="task-link">Tasks #{message.task_ids.join(", #")}</span>}{taskProgress(message.task_states) === "queued" && <span className="conductor-status queued">Message queued for Conductor</span>}{taskProgress(message.task_states) === "responding" && <span className="conductor-status responding"><i />Conductor has seen your message and is responding</span>}{taskProgress(message.task_states) === "failed" && <span className="conductor-status failed">Conductor could not respond. Check OpenCode authentication.</span>}</article>)}{detail.data.messages.length === 0 && <p className="empty">Start this conversation with the Conductor.</p>}</div>
         <form className="composer" onSubmit={submitMessage}><textarea aria-label="Message Conductor" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleComposerKeyDown} placeholder="Tell the Conductor what you need..." disabled={sendMessage.isPending} /><div><span>{sendMessage.isPending ? "Queueing workflow..." : "Enter to send · Shift+Enter for a new line."}</span><button type="submit" disabled={!draft.trim() || sendMessage.isPending}>{sendMessage.isPending ? "Sending..." : "Send"}</button></div>{sendMessage.isError && <p className="form-error">The message could not be queued. Check the local services and try again.</p>}</form>
       </> : <div className="empty-state">{detail.isLoading ? "Loading conversation..." : "Select a conversation to read it."}</div>}
     </section>
