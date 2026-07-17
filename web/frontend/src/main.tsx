@@ -110,6 +110,7 @@ function App() {
   const [draft, setDraft] = useState("");
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("task-train-sidebar-collapsed") === "true");
   const messagesRef = useRef<HTMLDivElement>(null);
   const scrolledConversation = useRef<number | null>(null);
   const lastMessageId = useRef<number | null>(null);
@@ -143,6 +144,7 @@ function App() {
     setTabs((current) => { const next = current.filter((tab) => tab.key !== key); if (activeTabKey === key) setActiveTabKey(next.at(-1)?.key ?? null); return next; });
   }
   useEffect(() => { if (selectedId === null && visible[0]) openConversation(visible[0]); }, [selectedId, visible]);
+  useEffect(() => { localStorage.setItem("task-train-sidebar-collapsed", String(sidebarCollapsed)); }, [sidebarCollapsed]);
   const newConversation = useMutation({
     mutationFn: () => request<{ conversation_id: number }>("/api/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }),
     onSuccess: ({ conversation_id }) => { openConversation({ id: conversation_id, title: "New chat" }); client.invalidateQueries({ queryKey: ["conversations"] }); },
@@ -184,20 +186,30 @@ function App() {
     }
   }
 
-  return <main className="shell">
+  return <main className={`shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
     <aside className="sidebar">
-      <header><p className="eyebrow">Task Train</p><h1>Conductor Inbox</h1><p className="subtle">User conversations</p></header>
-      <button className="new-chat" onClick={() => newConversation.mutate()} disabled={newConversation.isPending}>{newConversation.isPending ? "Starting..." : "New chat"}</button>
-      <input aria-label="Search conversations" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Search conversations" />
-      <section className="conversation-list">
-        {conversations.isLoading && <p className="empty">Loading conversations...</p>}
-        {visible.map((conversation) => <button key={conversation.id} className={`conversation ${conversation.id === selectedId ? "selected" : ""}`} onClick={() => openConversation(conversation)}>
-          <span className="conversation-title">{conversation.title}</span>
-          <span className="conversation-meta">{conversation.owner_name ?? "User"} · {formatTime(conversation.last_message_at)}</span>
-          <span className="preview">{conversation.last_message || "No messages yet"}</span>
-        </button>)}
-        {!conversations.isLoading && visible.length === 0 && <p className="empty">No user-Conductor conversations found.</p>}
-      </section>
+      <button
+        className="sidebar-toggle"
+        aria-label={sidebarCollapsed ? "Expand conversations panel" : "Collapse conversations panel"}
+        aria-expanded={!sidebarCollapsed}
+        onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+      >
+        <span aria-hidden="true">{sidebarCollapsed ? "›" : "‹"}</span>
+      </button>
+      <div className="sidebar-content">
+        <header><p className="eyebrow">Task Train</p><h1>Conductor Inbox</h1><p className="subtle">User conversations</p></header>
+        <button className="new-chat" onClick={() => newConversation.mutate()} disabled={newConversation.isPending}>{newConversation.isPending ? "Starting..." : "New chat"}</button>
+        <input aria-label="Search conversations" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Search conversations" />
+        <section className="conversation-list">
+          {conversations.isLoading && <p className="empty">Loading conversations...</p>}
+          {visible.map((conversation) => <button key={conversation.id} className={`conversation ${conversation.id === selectedId ? "selected" : ""}`} onClick={() => openConversation(conversation)}>
+            <span className="conversation-title">{conversation.title}</span>
+            <span className="conversation-meta">{conversation.owner_name ?? "User"} · {formatTime(conversation.last_message_at)}</span>
+            <span className="preview">{conversation.last_message || "No messages yet"}</span>
+          </button>)}
+          {!conversations.isLoading && visible.length === 0 && <p className="empty">No user-Conductor conversations found.</p>}
+        </section>
+      </div>
     </aside>
     <section className="thread">
       <nav className="workspace-nav"><button onClick={() => openTab({ key: "tasks", kind: "tasks", label: "Tasks" })}>Tasks</button><button onClick={() => openTab({ key: "artifacts", kind: "artifacts", label: "Artifacts" })}>Artifacts</button></nav>
