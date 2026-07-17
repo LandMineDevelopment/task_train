@@ -106,26 +106,33 @@ AS $function$
 DECLARE
     v_message_id bigint;
     v_parent_id bigint;
+    v_seq_num integer;
 BEGIN
     IF p_message = '' THEN
         RAISE EXCEPTION 'Message cannot be empty';
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM tagg.conversation WHERE id = p_conversation_id AND is_active = true) THEN
+    PERFORM 1 FROM tagg.conversation
+    WHERE id = p_conversation_id AND is_active = true
+    FOR UPDATE;
+    IF NOT FOUND THEN
         RAISE EXCEPTION 'Conversation % is not active', p_conversation_id;
     END IF;
 
     SELECT id INTO v_parent_id
     FROM tagg.message
     WHERE conversation_id = p_conversation_id AND is_active = true
-    ORDER BY id DESC
+    ORDER BY seq_num DESC, id DESC
     LIMIT 1;
+
+    SELECT COALESCE(max(seq_num), 0) + 1 INTO v_seq_num
+    FROM tagg.message WHERE conversation_id = p_conversation_id;
 
     INSERT INTO tagg.message (
         conversation_id, message, from_user, to_user, original_theme_alignment,
-        parent_id, role, status, metadata
+        parent_id, seq_num, role, status, metadata
     ) VALUES (
         p_conversation_id, p_message, p_from_user_id, p_to_user_id, 0,
-        v_parent_id, p_role, p_status, COALESCE(p_metadata, '{}'::jsonb)
+        v_parent_id, v_seq_num, p_role, p_status, COALESCE(p_metadata, '{}'::jsonb)
     ) RETURNING id INTO v_message_id;
 
     UPDATE tagg.conversation SET updated = CURRENT_TIMESTAMP WHERE id = p_conversation_id;

@@ -9,8 +9,10 @@ def test_conversation_context_is_ordered(db, sandbox):
         "SELECT tagg.get_or_create_user_conductor_conversation(%s, %s, %s)",
         (sandbox["project_id"], sandbox["user_id"], conductor),
     ).fetchone()[0]
-    db.execute("SELECT tagg.append_conversation_message(%s, %s, %s, 'first', 'user')", (conversation, sandbox["user_id"], conductor))
-    db.execute("SELECT tagg.append_conversation_message(%s, %s, %s, 'second', 'assistant')", (conversation, conductor, sandbox["user_id"]))
+    first_id = db.execute("SELECT tagg.append_conversation_message(%s, %s, %s, 'first', 'user')", (conversation, sandbox["user_id"], conductor)).fetchone()[0]
+    second_id = db.execute("SELECT tagg.append_conversation_message(%s, %s, %s, 'second', 'assistant')", (conversation, conductor, sandbox["user_id"])).fetchone()[0]
+    messages = db.execute("SELECT id, parent_id, seq_num FROM tagg.message WHERE conversation_id = %s ORDER BY seq_num", (conversation,)).fetchall()
+    assert messages == [(first_id, None, 1), (second_id, first_id, 2)]
     context = db.execute("SELECT tagg.get_conversation_context(%s, 2)", (conversation,)).fetchone()[0]
     assert context.index("first") < context.index("second")
 
