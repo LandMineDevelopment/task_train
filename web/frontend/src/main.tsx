@@ -41,6 +41,7 @@ function App() {
   const [titleDraft, setTitleDraft] = useState("");
   const messagesRef = useRef<HTMLDivElement>(null);
   const scrolledConversation = useRef<number | null>(null);
+  const lastMessageId = useRef<number | null>(null);
   const conversations = useQuery({ queryKey: ["conversations"], queryFn: () => request<{ conversations: Conversation[] }>("/api/conversations"), refetchInterval: 5000 });
   const visible = (conversations.data?.conversations ?? []).filter((conversation) =>
     `${conversation.title} ${conversation.owner_name ?? ""} ${conversation.last_message}`.toLowerCase().includes(filter.toLowerCase()),
@@ -67,11 +68,14 @@ function App() {
     onSuccess: () => { setEditingTitle(false); client.invalidateQueries({ queryKey: ["conversations"] }); client.invalidateQueries({ queryKey: ["conversation", selectedId] }); },
   });
 
-  useEffect(() => { scrolledConversation.current = null; setEditingTitle(false); }, [selectedId]);
+  useEffect(() => { scrolledConversation.current = null; lastMessageId.current = null; setEditingTitle(false); }, [selectedId]);
   useEffect(() => {
-    if (detail.data?.conversation.id === selectedId && scrolledConversation.current !== selectedId) {
-      messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight });
+    if (detail.data?.conversation.id === selectedId) {
+      const newestMessageId = detail.data.messages.at(-1)?.id ?? null;
+      if (scrolledConversation.current === selectedId && lastMessageId.current === newestMessageId) return;
+      requestAnimationFrame(() => messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight }));
       scrolledConversation.current = selectedId;
+      lastMessageId.current = newestMessageId;
     }
   }, [detail.data, selectedId]);
 
