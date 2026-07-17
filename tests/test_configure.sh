@@ -8,10 +8,11 @@ trap 'rm -rf "$TMPDIR"' EXIT
 cp "$ROOT/configure.sh" "$TMPDIR/configure.sh"
 chmod +x "$TMPDIR/configure.sh"
 
-(cd "$TMPDIR" && ./configure.sh --non-interactive --port 15433 --database test_db --user test_user --password test-password-123)
+(cd "$TMPDIR" && ./configure.sh --non-interactive --port 15433 --web-port 13000 --database test_db --user test_user --password test-password-123)
 test -f "$TMPDIR/.env"
 test "$(stat -c '%a' "$TMPDIR/.env")" = "600"
 grep -qx 'TASK_TRAIN_DB_PORT=15433' "$TMPDIR/.env"
+grep -qx 'TASK_TRAIN_WEB_PORT=13000' "$TMPDIR/.env"
 grep -qx 'POSTGRES_DB=test_db' "$TMPDIR/.env"
 grep -qx 'POSTGRES_USER=test_user' "$TMPDIR/.env"
 

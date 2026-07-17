@@ -20,10 +20,12 @@ docker compose up -d --build
 docker compose exec app bash tools/smoke_test.sh
 ```
 
-`configure.sh` creates a local, Git-ignored `.env` file and generates a secure database password unless you provide one. It asks for the Compose project name, host database port, database name, and database user. For automated setup:
+Open the conversation browser at `http://localhost:3000`. The browser port is configurable with `--web-port`.
+
+`configure.sh` creates a local, Git-ignored `.env` file and generates a secure database password unless you provide one. It asks for the Compose project name, host database port, browser web port, database name, and database user. For automated setup:
 
 ```bash
-./configure.sh --non-interactive --port 5434 --database task_train --user task_train
+./configure.sh --non-interactive --port 5434 --web-port 3000 --database task_train --user task_train
 ```
 
 The Compose database uses port `5433` by default. If it is occupied, choose another port during configuration. The application container always connects internally to `db:5432`; use the selected host port only for DBeaver or other host tools.
@@ -74,6 +76,22 @@ tests/test_fresh_bootstrap.sh
 
 The test suite covers schema bootstrap, roles and permissions, run tokens, task reservation/claim/failure transitions, conversation ordering, generic tagging constraints, PostgreSQL notifications, shell tool JSON output, and supervisor worker dispatch.
 
+## Conversation Browser
+
+The `web` Compose service serves a React browser UI and FastAPI read API. It displays `user_conductor` conversations in a searchable left pane and the selected conversation's messages in the main pane. The service is published only on `127.0.0.1`, so it is available from the local browser but not directly from the network.
+
+The initial UI is deliberately read-only and has no authentication. Treat it as a local development tool; do not expose it through a reverse proxy or public network until authentication and authorization are implemented.
+
+The browser polls every five seconds. It uses the same-origin endpoints below and never connects to PostgreSQL directly:
+
+```text
+GET /api/health
+GET /api/conversations?kind=user_conductor
+GET /api/conversations/{conversation_id}
+```
+
+`GET /api/conversations` returns list metadata, a last-message preview, and message count. The detail endpoint returns the conversation, chronological messages, sender/recipient metadata, and linked task IDs. API documentation is available locally at `http://localhost:3000/api/docs`.
+
 ## Native Install
 
 For an existing local PostgreSQL installation, run:
@@ -87,10 +105,14 @@ The installer checks `psql`, OpenCode, and `psycopg`, initializes an empty datab
 ## Architecture
 
 ```text
-User
-  |
-  | tools/conductor_chat.sh
-  v
+Browser user -- React conversation UI --> FastAPI web service
+                                                   |
+                                                   | parameterized read queries
+                                                   v
+Terminal user -- tools/conductor_chat.sh -------> PostgreSQL
+                                                   |
+                                                   |
+                                                   v
 PostgreSQL: user <-> Conductor conversation
   |
   | Conductor creates task rows

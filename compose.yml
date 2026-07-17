@@ -40,6 +40,27 @@ services:
     tty: true
     command: ["sleep", "infinity"]
 
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-task_train}
+      PGUSER: ${POSTGRES_USER:-task_train}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Run ./configure.sh before starting Docker Compose}
+    ports:
+      - "127.0.0.1:${TASK_TRAIN_WEB_PORT:-3000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
 volumes:
   task_train_data:
   opencode_data:
