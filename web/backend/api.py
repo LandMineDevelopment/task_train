@@ -71,6 +71,7 @@ def health():
 @app.get("/api/conversations")
 def list_conversations(kind: str = Query("user_conductor", pattern="^(user_conductor|agent_agent|task)$")):
     with database() as connection:
+        project_id, user_id, conductor_id = chat_participants(connection)
         rows = connection.execute(
             """
             SELECT c.id, c.title, c.kind, c.updated, p.name AS project_name,
@@ -88,11 +89,12 @@ def list_conversations(kind: str = Query("user_conductor", pattern="^(user_condu
                 ORDER BY id DESC LIMIT 1
             ) last_message ON true
             LEFT JOIN tagg.message m ON m.conversation_id = c.id AND m.is_active
-            WHERE c.is_active AND c.kind = %s
+            WHERE c.is_active AND c.kind = %s AND c.project_id = %s
+              AND c.owner_user_id = %s AND c.conductor_user_id = %s
             GROUP BY c.id, p.name, owner.name, conductor.name, last_message.message, last_message.created
             ORDER BY COALESCE(last_message.created, c.updated) DESC, c.id DESC
             """,
-            (kind,),
+            (kind, project_id, user_id, conductor_id),
         ).fetchall()
     return {"conversations": rows}
 
@@ -100,6 +102,7 @@ def list_conversations(kind: str = Query("user_conductor", pattern="^(user_condu
 @app.get("/api/conversations/{conversation_id}")
 def get_conversation(conversation_id: int):
     with database() as connection:
+        project_id, user_id, conductor_id = chat_participants(connection)
         conversation = connection.execute(
             """
             SELECT c.id, c.title, c.kind, c.created, c.updated, p.name AS project_name,
@@ -108,9 +111,10 @@ def get_conversation(conversation_id: int):
             JOIN tagg.project p ON p.id = c.project_id
             LEFT JOIN tagg.user owner ON owner.id = c.owner_user_id
             LEFT JOIN tagg.user conductor ON conductor.id = c.conductor_user_id
-            WHERE c.id = %s AND c.is_active
+            WHERE c.id = %s AND c.is_active AND c.project_id = %s
+              AND c.owner_user_id = %s AND c.conductor_user_id = %s
             """,
-            (conversation_id,),
+            (conversation_id, project_id, user_id, conductor_id),
         ).fetchone()
         if conversation is None:
             raise HTTPException(status_code=404, detail="Conversation not found")
@@ -169,6 +173,7 @@ def get_conversation(conversation_id: int):
 @app.get("/api/tasks")
 def list_tasks():
     with database() as connection:
+        project_id, user_id, conductor_id = chat_participants(connection)
         tasks = connection.execute(
             """
             SELECT task.id, task.task, status.name AS status, assignee.name AS assignee_name,
@@ -179,10 +184,12 @@ def list_tasks():
             JOIN tagg.user assignee ON assignee.id = task.to_user_id
             LEFT JOIN tagg.conversation conversation ON conversation.id = task.conversation_id
             LEFT JOIN tagg.artifact artifact ON artifact.agent_task_id = task.id
-            WHERE task.conversation_id IS NOT NULL
+            WHERE task.conversation_id IS NOT NULL AND task.project_id = %s
+              AND conversation.owner_user_id = %s AND conversation.conductor_user_id = %s
             GROUP BY task.id, status.name, assignee.name, conversation.title
             ORDER BY task.updated DESC, task.id DESC
-            """
+            """,
+            (project_id, user_id, conductor_id),
         ).fetchall()
     return {"tasks": tasks}
 
@@ -190,6 +197,7 @@ def list_tasks():
 @app.get("/api/tasks/{task_id}")
 def get_task(task_id: int):
     with database() as connection:
+        project_id, user_id, conductor_id = chat_participants(connection)
         task = connection.execute(
             """
             SELECT task.id, task.task, status.name AS status, assignee.name AS assignee_name,
@@ -206,10 +214,11 @@ def get_task(task_id: int):
             JOIN tagg.user assignee ON assignee.id = task.to_user_id
             LEFT JOIN tagg.conversation conversation ON conversation.id = task.conversation_id
             LEFT JOIN tagg.artifact artifact ON artifact.agent_task_id = task.id
-            WHERE task.id = %s
+            WHERE task.id = %s AND task.project_id = %s
+              AND conversation.owner_user_id = %s AND conversation.conductor_user_id = %s
             GROUP BY task.id, status.name, assignee.name, conversation.title
             """,
-            (task_id,),
+            (task_id, project_id, user_id, conductor_id),
         ).fetchone()
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -219,6 +228,7 @@ def get_task(task_id: int):
 @app.get("/api/artifacts")
 def list_artifacts():
     with database() as connection:
+        project_id, user_id, conductor_id = chat_participants(connection)
         artifacts = connection.execute(
             """
             SELECT artifact.id, artifact.name, artifact.descr AS description, artifact.artifact_type AS type,
@@ -228,8 +238,10 @@ def list_artifacts():
             JOIN tagg.agent_task task ON task.id = artifact.agent_task_id
             JOIN tagg.user assignee ON assignee.id = task.to_user_id
             LEFT JOIN tagg.conversation conversation ON conversation.id = task.conversation_id
+            WHERE task.project_id = %s AND conversation.owner_user_id = %s AND conversation.conductor_user_id = %s
             ORDER BY artifact.id DESC
-            """
+            """,
+            (project_id, user_id, conductor_id),
         ).fetchall()
     return {"artifacts": artifacts}
 
@@ -237,6 +249,7 @@ def list_artifacts():
 @app.get("/api/artifacts/{artifact_id}")
 def get_artifact(artifact_id: int):
     with database() as connection:
+        project_id, user_id, conductor_id = chat_participants(connection)
         artifact = connection.execute(
             """
             SELECT artifact.id, artifact.name, artifact.descr AS description, artifact.artifact_type AS type,
@@ -246,9 +259,10 @@ def get_artifact(artifact_id: int):
             JOIN tagg.agent_task task ON task.id = artifact.agent_task_id
             JOIN tagg.user assignee ON assignee.id = task.to_user_id
             LEFT JOIN tagg.conversation conversation ON conversation.id = task.conversation_id
-            WHERE artifact.id = %s
+            WHERE artifact.id = %s AND task.project_id = %s
+              AND conversation.owner_user_id = %s AND conversation.conductor_user_id = %s
             """,
-            (artifact_id,),
+            (artifact_id, project_id, user_id, conductor_id),
         ).fetchone()
     if artifact is None:
         raise HTTPException(status_code=404, detail="Artifact not found")
