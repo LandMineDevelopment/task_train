@@ -51,6 +51,32 @@ def test_claim_tool_emits_exactly_one_json_document(db, sandbox):
     assert payload["success"] is True
 
 
+def test_gateway_operations_and_errors_are_audited(db, sandbox):
+    coder = ids(db)["Coder"]
+    task_id = create_task(db, sandbox["project_id"], coder, "audit pytest task")
+    token = f"audit-{sandbox['suffix']}-abcdefghijklmnopqrstuvwxyz"
+    assert db.execute("SELECT tagg.reserve_task(%s)", (task_id,)).fetchone()[0]
+    start_run(db, task_id, coder, token)
+    db.execute("SELECT tagg.set_agent_run_context(%s)", (token,))
+    assert db.execute("SELECT tagg.claim_task(%s)", (task_id,)).fetchone()[0]["success"]
+    artifact_id = db.execute(
+        "SELECT tagg.artifact_add(%s, 'audit.py', 'audit output', 'code', 'print(1)')",
+        (task_id,),
+    ).fetchone()[0]
+    operations = db.execute(
+        """SELECT operation_type.name, operation_log.object_id
+           FROM tagg.operation_log
+           JOIN tagg.operation_type ON operation_type.id = operation_log.operation_type_id
+           WHERE operation_log.object_id IN (%s, %s)""",
+        (task_id, artifact_id),
+    ).fetchall()
+    assert ("claim", task_id) in operations
+    assert ("add", artifact_id) in operations
+    error_count = db.execute("SELECT count(*) FROM tagg.error_log WHERE operation = 'pytest_audit'").fetchone()[0]
+    db.execute("SELECT tagg.log_error('pytest_audit', 'expected test error', 'TEST', '{}'::jsonb)")
+    assert db.execute("SELECT count(*) FROM tagg.error_log WHERE operation = 'pytest_audit'").fetchone()[0] == error_count + 1
+
+
 def test_delegated_task_reports_progress_to_user_conversation(db, sandbox):
     identities = ids(db)
     conductor = identities["Conductor"]

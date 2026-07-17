@@ -110,13 +110,7 @@ def build_agent_map(agents: list[dict], project_root: str) -> dict[int, dict]:
 
 def mark_timed_out(db_conf: dict, timeout_secs: int):
     """Release stale reserved or in-progress tasks back to pending."""
-    psql_query(
-        f"UPDATE tagg.agent_task "
-        f"SET task_status_id = 1 "
-        f"WHERE task_status_id IN (2, 3) AND is_active = true "
-        f"  AND updated < NOW() - INTERVAL '{timeout_secs} seconds'",
-        db_conf,
-    )
+    psql_query(f"SELECT tagg.recover_stalled_tasks({timeout_secs})", db_conf)
 
 
 def reserve_task(task_id: int, db_conf: dict) -> bool:

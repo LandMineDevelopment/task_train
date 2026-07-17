@@ -13,5 +13,6 @@
 \i /workspace/sql/conductor_workflow.sql
 \i /workspace/sql/conversation_progress.sql
 \i /workspace/sql/artifact_only_workers.sql
+\i /workspace/sql/audit_gateway.sql
 \i /workspace/sql/generic_entities.sql
 \i /workspace/sql/documentation_comments.sql

@@ -24,4 +24,5 @@ psql --no-psqlrc -v ON_ERROR_STOP=1 -f /workspace/sql/browser_chat_workflow.sql 
 psql --no-psqlrc -v ON_ERROR_STOP=1 -f /workspace/sql/conductor_workflow.sql >/dev/null
 psql --no-psqlrc -v ON_ERROR_STOP=1 -f /workspace/sql/conversation_progress.sql >/dev/null
 psql --no-psqlrc -v ON_ERROR_STOP=1 -f /workspace/sql/artifact_only_workers.sql >/dev/null
+psql --no-psqlrc -v ON_ERROR_STOP=1 -f /workspace/sql/audit_gateway.sql >/dev/null
 exec runuser -u app -- "$@"

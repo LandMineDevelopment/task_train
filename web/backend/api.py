@@ -263,12 +263,8 @@ def create_conversation(payload: NewConversation):
     with database() as connection:
         project_id, user_id, conductor_id = chat_participants(connection)
         conversation = connection.execute(
-            """
-            INSERT INTO tagg.conversation (title, original_theme, project_id, kind, owner_user_id, conductor_user_id)
-            VALUES (%s, 'user_conductor', %s, 'user_conductor', %s, %s)
-            RETURNING id
-            """,
-            (title, project_id, user_id, conductor_id),
+            "SELECT tagg.create_browser_conversation(%s, %s, %s, %s) AS id",
+            (project_id, user_id, conductor_id, title),
         ).fetchone()
         connection.commit()
     return {"conversation_id": conversation["id"]}
@@ -281,33 +277,13 @@ def create_message(conversation_id: int, payload: NewMessage):
         raise HTTPException(status_code=422, detail="Message must contain between 1 and 20,000 characters")
     with database() as connection:
         project_id, user_id, conductor_id = chat_participants(connection)
-        conversation = connection.execute(
-            """
-            SELECT id FROM tagg.conversation
-            WHERE id = %s AND is_active AND kind = 'user_conductor'
-              AND owner_user_id = %s AND conductor_user_id = %s
-            """,
-            (conversation_id, user_id, conductor_id),
-        ).fetchone()
-        if conversation is None:
-            raise HTTPException(status_code=404, detail="Conversation not found")
-        user_message = connection.execute(
-            "SELECT tagg.append_conversation_message(%s, %s, %s, %s, 'user') AS id",
-            (conversation_id, user_id, conductor_id, message),
-        ).fetchone()
-        task = connection.execute(
-            """
-            INSERT INTO tagg.agent_task (from_user_id, to_user_id, task, project_id, workflow_id, conversation_id)
-            VALUES (%s, %s, 'Respond to the latest user message through the Conductor workflow.', %s,
-                    (SELECT id FROM tagg.workflow WHERE name = 'quick'), %s)
-            RETURNING id
-            """,
-            (user_id, conductor_id, project_id, conversation_id),
-        ).fetchone()
-        connection.execute(
-            "INSERT INTO tagg.message_agent_task_crosswalk (message_id, agent_task_id) VALUES (%s, %s)",
-            (user_message["id"], task["id"]),
-        )
+        try:
+            task = connection.execute(
+                "SELECT tagg.queue_browser_message(%s, %s, %s, %s, %s) AS id",
+                (conversation_id, project_id, user_id, conductor_id, message),
+            ).fetchone()
+        except psycopg.Error as error:
+            raise HTTPException(status_code=404, detail="Conversation not found") from error
         connection.commit()
     return {"task_id": task["id"], "status": "queued"}
 
@@ -319,18 +295,13 @@ def rename_conversation(conversation_id: int, payload: RenameConversation):
         raise HTTPException(status_code=422, detail="Title must contain between 1 and 200 characters")
     with database() as connection:
         _, user_id, conductor_id = chat_participants(connection)
-        conversation = connection.execute(
-            """
-            UPDATE tagg.conversation
-            SET title = %s, updated = CURRENT_TIMESTAMP
-            WHERE id = %s AND is_active AND kind = 'user_conductor'
-              AND owner_user_id = %s AND conductor_user_id = %s
-            RETURNING id, title
-            """,
-            (title, conversation_id, user_id, conductor_id),
-        ).fetchone()
-        if conversation is None:
-            raise HTTPException(status_code=404, detail="Conversation not found")
+        try:
+            conversation = connection.execute(
+                "SELECT %s AS id, tagg.rename_browser_conversation(%s, %s, %s, %s) AS title",
+                (conversation_id, conversation_id, user_id, conductor_id, title),
+            ).fetchone()
+        except psycopg.Error as error:
+            raise HTTPException(status_code=404, detail="Conversation not found") from error
         connection.commit()
     return {"conversation": conversation}
 
