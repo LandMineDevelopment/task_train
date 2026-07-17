@@ -11,8 +11,7 @@ FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION tagg.claim_task_for_run(text, bigint),
     tagg.artifact_add_for_run(text, bigint, varchar, varchar, varchar, text),
     tagg.advance_task_for_run(text, bigint), tagg.fail_task_for_run(text, bigint), tagg.create_task_for_run(text, bigint, bigint, text, text),
-    tagg.append_conversation_message(bigint, bigint, bigint, text, text, text, jsonb),
-    tagg.get_pending_tasks(integer)
+    tagg.get_current_task_for_run(text)
 TO task_train_worker;
 GRANT EXECUTE ON FUNCTION tagg.heartbeat_agent_run(text) TO task_train_worker;
 GRANT EXECUTE ON FUNCTION tagg.get_task_for_run(text, bigint), tagg.get_conversation_for_run(text, bigint), tagg.append_message_for_run(text, text, text) TO task_train_worker;

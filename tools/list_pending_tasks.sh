@@ -11,6 +11,5 @@ LIMIT="${2:-10}"
 : "${AGENT_RUN_TOKEN:?AGENT_RUN_TOKEN required}"
 
 psql --no-psqlrc -A -t 2>/dev/null <<SQL
-SELECT tagg.set_agent_run_context('$AGENT_RUN_TOKEN');
-SELECT tagg.get_pending_tasks($LIMIT)::text;
+SELECT jsonb_build_array(tagg.get_current_task_for_run('$AGENT_RUN_TOKEN'))::text;
 SQL

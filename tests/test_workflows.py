@@ -107,6 +107,22 @@ def test_worker_role_cannot_mutate_tables_but_can_use_gateway(db, sandbox):
     assert allowed.stdout.strip().endswith(tuple("0123456789"))
 
 
+def test_worker_run_cannot_access_another_assigned_task(db, sandbox):
+    coder = ids(db)["Coder"]
+    first_task = create_task(db, sandbox["project_id"], coder, "first scoped task")
+    second_task = create_task(db, sandbox["project_id"], coder, "second scoped task")
+    token = f"scoped-{sandbox['suffix']}-abcdefghijklmnopqrstuvwxyz"
+    start_run(db, first_task, coder, token)
+    env = os.environ | {"PGUSER": "task_train_worker", "PGPASSWORD": os.environ["PGWORKER_PASSWORD"]}
+    for query in (
+        f"SELECT tagg.get_task_for_run('{token}', {second_task})",
+        f"SELECT tagg.artifact_add_for_run('{token}', {second_task}, 'blocked.txt', 'blocked', 'code', 'no')",
+        f"SELECT tagg.fail_task_for_run('{token}', {second_task})",
+    ):
+        result = subprocess.run(["psql", "--no-psqlrc", "-c", query], env=env, text=True, capture_output=True)
+        assert result.returncode != 0
+
+
 def test_expired_run_is_abandoned_and_task_requeued(db, sandbox):
     coder = ids(db)["Coder"]
     task_id = create_task(db, sandbox["project_id"], coder, "expired run pytest task")

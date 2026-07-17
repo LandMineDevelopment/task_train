@@ -32,6 +32,17 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION tagg.get_current_task_for_run(p_token text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
+DECLARE v_task_id bigint;
+BEGIN
+    SELECT task_id INTO v_task_id FROM tagg.agent_run
+    WHERE token_hash = md5(p_token) AND status = 'running' AND expires_at > CURRENT_TIMESTAMP;
+    IF v_task_id IS NULL THEN RAISE EXCEPTION 'Invalid agent run'; END IF;
+    RETURN tagg.get_task_for_run(p_token, v_task_id);
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION tagg.append_message_for_run(p_token text, p_message text, p_status text DEFAULT 'complete')
 RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
 DECLARE v_run tagg.agent_run%ROWTYPE; v_owner bigint; v_message_id bigint;
@@ -204,5 +215,5 @@ BEGIN
 END;
 $function$;
 
-REVOKE EXECUTE ON FUNCTION tagg.authorize_run(text,bigint,text), tagg.set_run_audit_context(text), tagg.claim_task_for_run(text,bigint), tagg.artifact_add_for_run(text,bigint,varchar,varchar,varchar,text), tagg.advance_task_for_run(text,bigint), tagg.fail_task_for_run(text,bigint), tagg.create_task_for_run(text,bigint,bigint,text,text), tagg.get_task_for_run(text,bigint), tagg.get_conversation_for_run(text,bigint), tagg.append_message_for_run(text,text,text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION tagg.authorize_run(text,bigint,text), tagg.set_agent_run_context(text), tagg.claim_task(bigint), tagg.artifact_add(bigint,varchar,varchar,varchar,text), tagg.agent_task_add(bigint,bigint,text,bigint,bigint,bigint), tagg.advance_workflow(bigint), tagg.fail_task(bigint), tagg.append_conversation_message(bigint,bigint,bigint,text,text,text,jsonb), tagg.get_pending_tasks(integer), tagg.claim_task_for_run(text,bigint), tagg.artifact_add_for_run(text,bigint,varchar,varchar,varchar,text), tagg.advance_task_for_run(text,bigint), tagg.fail_task_for_run(text,bigint), tagg.create_task_for_run(text,bigint,bigint,text,text), tagg.get_task_for_run(text,bigint), tagg.get_conversation_for_run(text,bigint), tagg.get_current_task_for_run(text), tagg.append_message_for_run(text,text,text) FROM PUBLIC;
 RESET search_path;
