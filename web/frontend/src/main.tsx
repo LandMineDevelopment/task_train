@@ -33,6 +33,42 @@ function taskProgress(taskStates: Message["task_states"]) {
   return null;
 }
 
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  const lines = code.replace(/\n$/, "").split("\n");
+  return <div className="code-block">
+    <div className="code-block-header"><span>Code</span>{language && <span>{language}</span>}</div>
+    <pre><code>{lines.map((line, index) => <span className="code-line" key={index}><span className="line-number">{index + 1}</span><span>{line || " "}</span></span>)}</code></pre>
+  </div>;
+}
+
+function FormattedContent({ content }: { content: string }) {
+  const blocks: React.ReactNode[] = [];
+  const fencedCode = /```([^\n`]*)\n?([\s\S]*?)```/g;
+  let cursor = 0;
+  for (const match of content.matchAll(fencedCode)) {
+    const text = content.slice(cursor, match.index);
+    if (text) blocks.push(<p className="message-text" key={`text-${cursor}`}>{text.trim()}</p>);
+    blocks.push(<CodeBlock key={`code-${match.index}`} language={match[1].trim()} code={match[2]} />);
+    cursor = (match.index ?? 0) + match[0].length;
+  }
+  const text = content.slice(cursor);
+  if (text) blocks.push(<p className="message-text" key={`text-${cursor}`}>{text.trim()}</p>);
+  return <>{blocks}</>;
+}
+
+function MessageContent({ content }: { content: string }) {
+  const marker = "\n\nArtifact:\n";
+  const artifactStart = content.indexOf(marker);
+  if (artifactStart === -1) return <FormattedContent content={content} />;
+  return <>
+    <FormattedContent content={content.slice(0, artifactStart)} />
+    <section className="artifact-output">
+      <div className="artifact-heading">Artifact output</div>
+      <FormattedContent content={content.slice(artifactStart + marker.length)} />
+    </section>
+  </>;
+}
+
 function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filter, setFilter] = useState("");
@@ -114,7 +150,7 @@ function App() {
     <section className="thread">
       {detail.data ? <>
         <header className="thread-header"><div><p className="eyebrow">{detail.data.conversation.project_name}</p>{editingTitle ? <form className="rename-form" onSubmit={submitRename}><input aria-label="Conversation title" value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} autoFocus /><button type="submit" disabled={renameConversation.isPending}>Save</button><button type="button" onClick={() => setEditingTitle(false)}>Cancel</button></form> : <div className="title-row"><h2>{detail.data.conversation.title}</h2><button className="rename-button" onClick={() => { setTitleDraft(detail.data.conversation.title); setEditingTitle(true); }}>Rename</button></div>}<p className="subtle">{detail.data.conversation.owner_name ?? "User"} ↔ {detail.data.conversation.conductor_name ?? "Conductor"}</p></div><span className="count">{detail.data.messages.length} messages</span></header>
-        <div className="messages" ref={messagesRef}>{detail.data.messages.map((message) => <article key={message.id} className={`message ${message.sender_is_agent ? "agent" : "human"}`}><div className="message-meta"><strong>{message.sender_name}</strong><time>{formatTime(message.created)}</time></div><p>{message.message}</p>{message.task_ids.length > 0 && <span className="task-link">Tasks #{message.task_ids.join(", #")}</span>}{taskProgress(message.task_states) === "queued" && <span className="conductor-status queued">Message queued for Conductor</span>}{taskProgress(message.task_states) === "responding" && <span className="conductor-status responding"><i />Conductor has seen your message and is responding</span>}{taskProgress(message.task_states) === "failed" && <span className="conductor-status failed">Conductor could not respond. Check OpenCode authentication.</span>}</article>)}{detail.data.messages.length === 0 && <p className="empty">Start this conversation with the Conductor.</p>}</div>
+        <div className="messages" ref={messagesRef}>{detail.data.messages.map((message) => <article key={message.id} className={`message ${message.sender_is_agent ? "agent" : "human"}`}><div className="message-meta"><strong>{message.sender_name}</strong><time>{formatTime(message.created)}</time></div><MessageContent content={message.message} />{message.task_ids.length > 0 && <span className="task-link">Tasks #{message.task_ids.join(", #")}</span>}{taskProgress(message.task_states) === "queued" && <span className="conductor-status queued">Message queued for Conductor</span>}{taskProgress(message.task_states) === "responding" && <span className="conductor-status responding"><i />Conductor has seen your message and is responding</span>}{taskProgress(message.task_states) === "failed" && <span className="conductor-status failed">Conductor could not respond. Check OpenCode authentication.</span>}</article>)}{detail.data.messages.length === 0 && <p className="empty">Start this conversation with the Conductor.</p>}</div>
         <form className="composer" onSubmit={submitMessage}><textarea aria-label="Message Conductor" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleComposerKeyDown} placeholder="Tell the Conductor what you need..." disabled={sendMessage.isPending} /><div><span>{sendMessage.isPending ? "Queueing workflow..." : "Enter to send · Shift+Enter for a new line."}</span><button type="submit" disabled={!draft.trim() || sendMessage.isPending}>{sendMessage.isPending ? "Sending..." : "Send"}</button></div>{sendMessage.isError && <p className="form-error">The message could not be queued. Check the local services and try again.</p>}</form>
       </> : <div className="empty-state">{detail.isLoading ? "Loading conversation..." : "Select a conversation to read it."}</div>}
     </section>
