@@ -58,6 +58,7 @@ DECLARE
     v_owner_id bigint;
     v_agent_name text;
     v_message text;
+    v_artifact_body text;
 BEGIN
     IF NEW.conversation_id IS NULL
        OR NEW.task_status_id IS NOT DISTINCT FROM OLD.task_status_id THEN
@@ -79,6 +80,17 @@ BEGIN
         WHEN 8 THEN format('%s cancelled task #%s: %s', v_agent_name, NEW.id, NEW.task)
         ELSE NULL
     END;
+    IF NEW.task_status_id = 4 THEN
+        SELECT left(body, 12000) INTO v_artifact_body
+        FROM tagg.artifact
+        WHERE agent_task_id = NEW.id
+          AND NULLIF(btrim(body), '') IS NOT NULL
+        ORDER BY id DESC
+        LIMIT 1;
+        IF v_artifact_body IS NOT NULL THEN
+            v_message := v_message || E'\n\nArtifact:\n' || v_artifact_body;
+        END IF;
+    END IF;
     IF v_message IS NOT NULL THEN
         PERFORM tagg.append_conversation_message(
             NEW.conversation_id, v_conductor_id, v_owner_id, v_message, 'assistant'

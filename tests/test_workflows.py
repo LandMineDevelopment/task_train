@@ -75,6 +75,11 @@ def test_delegated_task_reports_progress_to_user_conversation(db, sandbox):
     ).fetchone()[0]
     assert db.execute("SELECT conversation_id FROM tagg.agent_task WHERE id = %s", (delegated_task,)).fetchone()[0] == conversation
     db.execute("UPDATE tagg.agent_task SET task_status_id = 3 WHERE id = %s", (delegated_task,))
+    db.execute(
+        """INSERT INTO tagg.artifact(agent_task_id, name, descr, artifact_type, body)
+           VALUES (%s, 'implementation', 'completed work', 'code', %s)""",
+        (delegated_task, "print('artifact output')"),
+    )
     db.execute("UPDATE tagg.agent_task SET task_status_id = 4 WHERE id = %s", (delegated_task,))
     updates = [
         row[0] for row in db.execute(
@@ -83,3 +88,4 @@ def test_delegated_task_reports_progress_to_user_conversation(db, sandbox):
     ]
     assert any(f"Coder started task #{delegated_task}" in message for message in updates)
     assert any(f"Coder completed task #{delegated_task}" in message for message in updates)
+    assert any("Artifact:\nprint('artifact output')" in message for message in updates)
