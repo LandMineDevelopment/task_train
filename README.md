@@ -80,11 +80,13 @@ Run the full clean-install test, including a temporary Docker project and config
 tests/test_fresh_bootstrap.sh
 ```
 
-The test suite covers schema bootstrap, roles and permissions, run tokens, task reservation/claim/failure transitions, conversation ordering, generic tagging constraints, PostgreSQL notifications, shell tool JSON output, and supervisor worker dispatch.
+The test suite covers schema bootstrap, roles and permissions, run tokens, task reservation/claim/failure transitions, conversation ordering, generic tagging constraints, PostgreSQL notifications, shell tool JSON output, supervisor worker dispatch, and browser conversation/task/artifact API flows.
 
 ## Conversation Browser
 
 The `web` Compose service serves a React browser UI and FastAPI chat API. It displays `user_conductor` conversations in a searchable left pane and the selected conversation's messages in the main pane. Select **New chat** to create a separate thread, then send messages from the composer. The service records the user message and queues a linked quick-workflow task for Conductor. The dedicated `supervisor` service creates the agent run, Conductor delegates specialist work through the normal task workflow, then its response is recorded in the original conversation. The service is published only on `127.0.0.1`, so it is available from the local browser but not directly from the network.
+
+The workspace navigation opens in-app tabs for conversations, tasks, and artifacts. Use **Tasks** or **Artifacts** above the main pane to browse all conversation-linked records. Task cards, task numbers, and artifact names in a conversation are clickable. Task detail tabs show the assignee, status, full task text, produced artifacts, and a link back to the originating conversation. Artifact detail tabs show the artifact type, producing task, and its complete body. Code artifacts render with line numbers; the browser does not imply that an artifact name is a file currently present in the repository.
 
 The UI has no authentication and acts as the `local-user` database user. Treat it as a local development tool; do not expose it through a reverse proxy or public network until authentication and authorization are implemented.
 
@@ -94,11 +96,15 @@ The browser polls every five seconds. It uses the same-origin endpoints below an
 GET /api/health
 GET /api/conversations?kind=user_conductor
 GET /api/conversations/{conversation_id}
+GET /api/tasks
+GET /api/tasks/{task_id}
+GET /api/artifacts
+GET /api/artifacts/{artifact_id}
 POST /api/conversations
 POST /api/conversations/{conversation_id}/messages
 ```
 
-`GET /api/conversations` returns list metadata, a last-message preview, and message count. The detail endpoint returns the conversation, chronological messages, sender/recipient metadata, and linked task IDs. `POST /api/conversations` creates a new user-Conductor thread. Posting a message queues a linked quick-workflow task and returns its ID; the browser polling view displays the response when the workflow completes. API documentation is available locally at `http://localhost:3000/api/docs`.
+`GET /api/conversations` returns list metadata, a normalized 180-character last-message preview, and message count. The detail endpoint returns the conversation, chronological messages, sender/recipient metadata, linked task IDs, and conversation-linked tasks with their artifacts. `GET /api/tasks` and `GET /api/artifacts` provide workspace lists; their detail endpoints return the linked conversation/task context and complete artifact body where applicable. `POST /api/conversations` creates a new user-Conductor thread. Posting a message queues a linked quick-workflow task and returns its ID; the browser polling view displays the response when the workflow completes. API documentation is available locally at `http://localhost:3000/api/docs`.
 
 ## Native Install
 
