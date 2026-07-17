@@ -17,6 +17,7 @@ type Task = { id: number; task: string; status: string; assignee_name: string; a
 type ArtifactRecord = Artifact & { task_id: number; conversation_id: number | null; conversation_title: string | null; assignee_name: string; task?: string; created?: string };
 type Detail = { conversation: Conversation; messages: Message[]; tasks: Task[] };
 type Tab = { key: string; kind: "conversation" | "tasks" | "artifacts" | "task" | "artifact"; id?: number; label: string };
+type WorkspaceView = "chat" | "tasks" | "artifacts";
 
 const client = new QueryClient();
 
@@ -104,10 +105,10 @@ function ArtifactList({ artifacts, openArtifact }: { artifacts: ArtifactRecord[]
 
 function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [tabs, setTabs] = useState<Tab[]>([]);
-  const [activeTabKey, setActiveTabKey] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab | null>(null);
   const [filter, setFilter] = useState("");
   const [draft, setDraft] = useState("");
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -129,13 +130,11 @@ function App() {
   const detail = useQuery({ queryKey: ["conversation", selectedId], queryFn: () => request<Detail>(`/api/conversations/${selectedId}`), enabled: selectedId !== null, refetchInterval: 5000 });
   const taskList = useQuery({ queryKey: ["tasks"], queryFn: () => request<{ tasks: Task[] }>("/api/tasks") });
   const artifactList = useQuery({ queryKey: ["artifacts"], queryFn: () => request<{ artifacts: ArtifactRecord[] }>("/api/artifacts") });
-  const activeTab = tabs.find((tab) => tab.key === activeTabKey) ?? null;
   const taskDetail = useQuery({ queryKey: ["task", activeTab?.id], queryFn: () => request<Task>(`/api/tasks/${activeTab?.id}`), enabled: activeTab?.kind === "task" });
   const artifactDetail = useQuery({ queryKey: ["artifact", activeTab?.id], queryFn: () => request<ArtifactRecord>(`/api/artifacts/${activeTab?.id}`), enabled: activeTab?.kind === "artifact" });
 
   function openTab(tab: Tab) {
-    setTabs((current) => current.some((item) => item.key === tab.key) ? current : [...current, tab]);
-    setActiveTabKey(tab.key);
+    setActiveTab(tab);
   }
   function openConversation(conversation: Pick<Conversation, "id" | "title">) {
     setSelectedId(conversation.id);
@@ -143,8 +142,19 @@ function App() {
   }
   function openTask(task: Pick<Task, "id" | "task">) { openTab({ key: `task-${task.id}`, kind: "task", id: task.id, label: `Task #${task.id}` }); }
   function openArtifact(artifact: Pick<Artifact, "id" | "name">) { openTab({ key: `artifact-${artifact.id}`, kind: "artifact", id: artifact.id, label: artifact.name }); }
-  function closeTab(key: string) {
-    setTabs((current) => { const next = current.filter((tab) => tab.key !== key); if (activeTabKey === key) setActiveTabKey(next.at(-1)?.key ?? null); return next; });
+  function activeWorkspaceView(): WorkspaceView {
+    if (activeTab?.kind === "tasks" || activeTab?.kind === "task") return "tasks";
+    if (activeTab?.kind === "artifacts" || activeTab?.kind === "artifact") return "artifacts";
+    return "chat";
+  }
+  function switchWorkspace(view: WorkspaceView) {
+    if (view === "tasks") openTab({ key: "tasks", kind: "tasks", label: "Tasks" });
+    else if (view === "artifacts") openTab({ key: "artifacts", kind: "artifacts", label: "Artifacts" });
+    else {
+      const conversation = conversations.data?.conversations.find((item) => item.id === selectedId) ?? visible[0];
+      if (conversation) openConversation(conversation);
+    }
+    setWorkspaceMenuOpen(false);
   }
   useEffect(() => { if (selectedId === null && visible[0]) openConversation(visible[0]); }, [selectedId, visible]);
   useEffect(() => { localStorage.setItem("task-train-sidebar-collapsed", String(sidebarCollapsed)); }, [sidebarCollapsed]);
@@ -216,8 +226,12 @@ function App() {
     </aside>
     <section className="thread">
       <nav className="workspace-nav" aria-label="Workspace navigation">
-        <div className="workspace-actions"><button onClick={() => openTab({ key: "tasks", kind: "tasks", label: "Tasks" })}>Tasks</button><button onClick={() => openTab({ key: "artifacts", kind: "artifacts", label: "Artifacts" })}>Artifacts</button></div>
-        {tabs.length > 0 && <div className="tabs">{tabs.map((tab) => <div className={`tab ${tab.key === activeTabKey ? "active" : ""}`} key={tab.key}><button onClick={() => { setActiveTabKey(tab.key); if (tab.kind === "conversation" && tab.id) setSelectedId(tab.id); }}>{tab.label}</button><button aria-label={`Close ${tab.label}`} onClick={() => closeTab(tab.key)}>×</button></div>)}</div>}
+        <div className="workspace-menu">
+          <button className="workspace-menu-button" aria-label="Open workspace menu" aria-expanded={workspaceMenuOpen} onClick={() => setWorkspaceMenuOpen((open) => !open)}><span className="menu-icon" aria-hidden="true" /></button>
+          {workspaceMenuOpen && <div className="workspace-menu-panel" role="menu">
+            {(["chat", "tasks", "artifacts"] as WorkspaceView[]).map((view) => <button key={view} className={activeWorkspaceView() === view ? "current" : ""} aria-current={activeWorkspaceView() === view ? "page" : undefined} role="menuitem" onClick={() => switchWorkspace(view)}>{view === "chat" ? "Chat" : view[0].toUpperCase() + view.slice(1)}</button>)}
+          </div>}
+        </div>
       </nav>
       {activeTab?.kind === "tasks" ? <section className="detail-view"><header className="thread-header"><div><p className="eyebrow">Workspace</p><h2>Tasks</h2></div><span className="count">{taskList.data?.tasks.length ?? 0} tasks</span></header><TaskList tasks={taskList.data?.tasks ?? []} openTask={openTask} /></section>
         : activeTab?.kind === "artifacts" ? <section className="detail-view"><header className="thread-header"><div><p className="eyebrow">Workspace</p><h2>Artifacts</h2></div><span className="count">{artifactList.data?.artifacts.length ?? 0} artifacts</span></header><ArtifactList artifacts={artifactList.data?.artifacts ?? []} openArtifact={openArtifact} /></section>

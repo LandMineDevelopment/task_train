@@ -126,6 +126,7 @@ button:disabled, textarea:disabled { cursor: not-allowed; opacity: .6; }
 .conversation-meta, .preview { overflow: hidden; color: #94a3bd; font-size: .78rem; text-overflow: ellipsis; white-space: nowrap; }
 
 .thread {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -134,19 +135,15 @@ button:disabled, textarea:disabled { cursor: not-allowed; opacity: .6; }
 }
 
 .workspace-nav {
-  display: flex;
-  min-height: 36px;
-  gap: 6px;
-  padding: 4px 20px;
-  overflow-x: auto;
-  border-bottom: 1px solid #263451;
-  background: #10182b;
-  scrollbar-width: thin;
+  position: absolute;
+  z-index: 3;
+  top: 15px;
+  right: clamp(20px, 4vw, 42px);
+  display: block;
+  overflow: visible;
 }
 
-.workspace-nav { align-items: center; }
-.workspace-actions, .tabs { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
-.tabs { min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.workspace-menu { position: relative; display: flex; align-items: center; }
 .workspace-nav button, .tabs button, .record-link, .artifact-heading button, .task-activity summary button, .task-link {
   border: 0;
   background: transparent;
@@ -154,7 +151,13 @@ button:disabled, textarea:disabled { cursor: not-allowed; opacity: .6; }
   cursor: pointer;
   font: inherit;
 }
-.workspace-nav button { border: 1px solid #36557f; border-radius: 6px; padding: 2px 7px; font-size: .74rem; }
+.workspace-menu-button { display: grid; width: 28px; height: 28px; padding: 0; place-items: center; border: 1px solid #36557f; border-radius: 6px; font-size: 1rem; line-height: 1; }
+.workspace-menu-button:hover, .workspace-menu-button[aria-expanded="true"] { border-color: #75e6b2; background: #17223a; }
+.menu-icon { width: 12px; height: 8px; background: linear-gradient(#8de6bd 0 1px, transparent 1px 3px, #8de6bd 3px 4px, transparent 4px 7px, #8de6bd 7px 8px); }
+.workspace-menu-panel { position: absolute; z-index: 3; top: calc(100% + 7px); right: 0; display: grid; min-width: 148px; gap: 3px; padding: 6px; border: 1px solid #36557f; border-radius: 8px; background: #17223a; box-shadow: 0 12px 28px rgb(0 0 0 / 35%); }
+.workspace-menu-panel button { border: 0; border-radius: 5px; padding: 8px 10px; color: #d9e5f5; text-align: left; }
+.workspace-menu-panel button:hover { background: #263b60; color: #75e6b2; }
+.workspace-menu-panel button.current { background: #1b3d4c; color: #75e6b2; font-weight: 700; }
 .tab { display: flex; flex: 0 0 auto; overflow: hidden; border: 1px solid #334363; border-radius: 6px; background: #17223a; white-space: nowrap; }
 .tab.active { border-color: #75e6b2; }
 .tab button { max-width: 210px; overflow: hidden; padding: 5px 8px; text-overflow: ellipsis; }
@@ -169,6 +172,8 @@ button:disabled, textarea:disabled { cursor: not-allowed; opacity: .6; }
   padding: 10px clamp(20px, 4vw, 42px);
   border-bottom: 1px solid #263451;
 }
+
+.thread-header > .count, .thread-header > .record-link { margin-right: 42px; }
 
 .title-row, .rename-form { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .thread-header .eyebrow, .thread-header .subtle { display: none; }
@@ -272,7 +277,7 @@ button:disabled, textarea:disabled { cursor: not-allowed; opacity: .6; }
   .sidebar-content { padding: 18px 16px; gap: 14px; }
   .sidebar-collapsed .sidebar { min-height: 0; }
   .sidebar-collapsed .sidebar-toggle { top: 13px; right: 13px; }
-  .workspace-nav { padding-right: 16px; padding-left: 16px; }
+  .workspace-nav { top: 13px; right: 20px; }
   .thread-header { align-items: center; padding: 10px 20px; }
   .messages, .detail-body, .record-list { padding: 20px; }
   .message { max-width: 100%; padding: 14px; }
