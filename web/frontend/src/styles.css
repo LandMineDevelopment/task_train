@@ -28,3 +28,9 @@ input, textarea { width: 100%; border: 1px solid #334363; border-radius: 9px; ba
 .task-activity summary > em { margin-left: auto; font-style: normal; }
 .task-activity > p { padding: 0 12px 11px 31px; color: #9db2cc; white-space: pre-wrap; }
 .task-state { color: #9db2cc; }.task-state.completed { color: #75e6b2; }.task-state.failed, .task-state.cancelled { color: #ff9d9d; }
+.workspace-nav, .tabs { display: flex; gap: 6px; padding: 8px 20px; border-bottom: 1px solid #263451; background: #10182b; overflow-x: auto; }
+.workspace-nav button, .tabs button, .record-link, .artifact-heading button, .task-activity summary button, .task-link { border: 0; background: transparent; color: #8de6bd; cursor: pointer; font: inherit; }
+.workspace-nav button { border: 1px solid #36557f; border-radius: 6px; padding: 4px 8px; font-size: .76rem; }
+.tab { display: flex; border: 1px solid #334363; border-radius: 6px; background: #17223a; overflow: hidden; white-space: nowrap; }.tab.active { border-color: #75e6b2; }.tab button { padding: 5px 8px; }.tab button + button { border-left: 1px solid #334363; color: #a8b8d2; }
+.detail-view { display: flex; flex: 1; flex-direction: column; min-height: 0; }.detail-body, .record-list { width: min(900px, 100%); margin: 0 auto; padding: 28px 42px; overflow-y: auto; }.record-list { display: grid; gap: 9px; }.record { display: grid; gap: 5px; border: 1px solid #293958; border-radius: 9px; background: #141e33; color: #d9e5f5; cursor: pointer; padding: 13px; text-align: left; }.record:hover { border-color: #75e6b2; }.record-kicker { color: #75e6b2; font: .72rem ui-monospace, SFMono-Regular, Menlo, monospace; }.record > span:last-child { color: #a8b8d2; font-size: .84rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-heading button { color: #d4f9e4; font: 600 .76rem ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: none; }.task-link { display: inline-block; margin-top: 10px; padding: 0; }

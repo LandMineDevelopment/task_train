@@ -166,6 +166,95 @@ def get_conversation(conversation_id: int):
     return {"conversation": conversation, "messages": messages, "tasks": tasks}
 
 
+@app.get("/api/tasks")
+def list_tasks():
+    with database() as connection:
+        tasks = connection.execute(
+            """
+            SELECT task.id, task.task, status.name AS status, assignee.name AS assignee_name,
+                   task.conversation_id, conversation.title AS conversation_title,
+                   COUNT(artifact.id) AS artifact_count
+            FROM tagg.agent_task task
+            JOIN tagg.task_status status ON status.id = task.task_status_id
+            JOIN tagg.user assignee ON assignee.id = task.to_user_id
+            LEFT JOIN tagg.conversation conversation ON conversation.id = task.conversation_id
+            LEFT JOIN tagg.artifact artifact ON artifact.agent_task_id = task.id
+            WHERE task.conversation_id IS NOT NULL
+            GROUP BY task.id, status.name, assignee.name, conversation.title
+            ORDER BY task.updated DESC, task.id DESC
+            """
+        ).fetchall()
+    return {"tasks": tasks}
+
+
+@app.get("/api/tasks/{task_id}")
+def get_task(task_id: int):
+    with database() as connection:
+        task = connection.execute(
+            """
+            SELECT task.id, task.task, status.name AS status, assignee.name AS assignee_name,
+                   task.conversation_id, conversation.title AS conversation_title,
+                   COALESCE(
+                       jsonb_agg(jsonb_build_object(
+                           'id', artifact.id, 'name', artifact.name, 'description', artifact.descr,
+                           'type', artifact.artifact_type, 'body', artifact.body
+                       ) ORDER BY artifact.id) FILTER (WHERE artifact.id IS NOT NULL),
+                       '[]'::jsonb
+                   ) AS artifacts
+            FROM tagg.agent_task task
+            JOIN tagg.task_status status ON status.id = task.task_status_id
+            JOIN tagg.user assignee ON assignee.id = task.to_user_id
+            LEFT JOIN tagg.conversation conversation ON conversation.id = task.conversation_id
+            LEFT JOIN tagg.artifact artifact ON artifact.agent_task_id = task.id
+            WHERE task.id = %s
+            GROUP BY task.id, status.name, assignee.name, conversation.title
+            """,
+            (task_id,),
+        ).fetchone()
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@app.get("/api/artifacts")
+def list_artifacts():
+    with database() as connection:
+        artifacts = connection.execute(
+            """
+            SELECT artifact.id, artifact.name, artifact.descr AS description, artifact.artifact_type AS type,
+                   artifact.created, task.id AS task_id, task.conversation_id, conversation.title AS conversation_title,
+                   assignee.name AS assignee_name
+            FROM tagg.artifact artifact
+            JOIN tagg.agent_task task ON task.id = artifact.agent_task_id
+            JOIN tagg.user assignee ON assignee.id = task.to_user_id
+            LEFT JOIN tagg.conversation conversation ON conversation.id = task.conversation_id
+            ORDER BY artifact.id DESC
+            """
+        ).fetchall()
+    return {"artifacts": artifacts}
+
+
+@app.get("/api/artifacts/{artifact_id}")
+def get_artifact(artifact_id: int):
+    with database() as connection:
+        artifact = connection.execute(
+            """
+            SELECT artifact.id, artifact.name, artifact.descr AS description, artifact.artifact_type AS type,
+                   artifact.body, artifact.created, task.id AS task_id, task.task, task.conversation_id,
+                   conversation.title AS conversation_title, assignee.name AS assignee_name
+            FROM tagg.artifact artifact
+            JOIN tagg.agent_task task ON task.id = artifact.agent_task_id
+            JOIN tagg.user assignee ON assignee.id = task.to_user_id
+            LEFT JOIN tagg.conversation conversation ON conversation.id = task.conversation_id
+            WHERE artifact.id = %s
+            """,
+            (artifact_id,),
+        ).fetchone()
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    return artifact
+
+
 @app.post("/api/conversations")
 def create_conversation(payload: NewConversation):
     title = (payload.title or "Chat with Conductor").strip()
