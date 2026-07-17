@@ -30,6 +30,8 @@ services:
       PGDATABASE: ${POSTGRES_DB:-task_train}
       PGUSER: ${POSTGRES_USER:-task_train}
       PGPASSWORD: ${POSTGRES_PASSWORD:?Run ./configure.sh before starting Docker Compose}
+      PGWORKER_USER: task_train_worker
+      PGWORKER_PASSWORD: ${POSTGRES_PASSWORD:?Run ./configure.sh before starting Docker Compose}
       SUPERVISOR_CONFIG: /tmp/agents.container.json
     working_dir: /workspace
     volumes:

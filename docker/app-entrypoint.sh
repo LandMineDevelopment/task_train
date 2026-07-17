@@ -16,6 +16,8 @@ config['db'] = {
     'dbname': os.environ['PGDATABASE'],
     'user': os.environ['PGUSER'],
     'password': os.environ['PGPASSWORD'],
+    'worker_user': os.environ.get('PGWORKER_USER', 'task_train_worker'),
+    'worker_password': os.environ.get('PGWORKER_PASSWORD', os.environ['PGPASSWORD']),
 }
 Path('/tmp/agents.container.json').write_text(json.dumps(config))
 PY

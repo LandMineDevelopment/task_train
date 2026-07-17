@@ -379,10 +379,10 @@ def main():
                 env["PGHOST"] = db_conf["host"]
                 env["PGPORT"] = str(db_conf["port"])
                 env["PGDATABASE"] = db_conf["dbname"]
-                env["PGUSER"] = db_conf["user"]
+                env["PGUSER"] = db_conf.get("worker_user", db_conf["user"])
                 env["PROJECT_ROOT"] = project_root
                 if "password" in db_conf:
-                    env["PGPASSWORD"] = db_conf["password"]
+                    env["PGPASSWORD"] = db_conf.get("worker_password", db_conf["password"])
 
                 proc = subprocess.Popen(
                     [agent["command"]],

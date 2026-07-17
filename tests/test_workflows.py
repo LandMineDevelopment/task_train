@@ -77,6 +77,24 @@ def test_gateway_operations_and_errors_are_audited(db, sandbox):
     assert db.execute("SELECT count(*) FROM tagg.error_log WHERE operation = 'pytest_audit'").fetchone()[0] == error_count + 1
 
 
+def test_worker_role_cannot_mutate_tables_but_can_use_gateway(db, sandbox):
+    coder = ids(db)["Coder"]
+    task_id = create_task(db, sandbox["project_id"], coder, "restricted worker pytest task")
+    token = f"worker-{sandbox['suffix']}-abcdefghijklmnopqrstuvwxyz"
+    start_run(db, task_id, coder, token)
+    env = os.environ | {"PGUSER": "task_train_worker", "AGENT_RUN_TOKEN": token}
+    denied = subprocess.run(
+        ["psql", "--no-psqlrc", "-c", "UPDATE tagg.agent_task SET task_status_id = 4 WHERE id = 0"],
+        env=env, text=True, capture_output=True,
+    )
+    assert denied.returncode != 0
+    allowed = subprocess.run(
+        ["psql", "--no-psqlrc", "-At", "-c", f"SELECT tagg.set_agent_run_context('{token}'); SELECT tagg.artifact_add({task_id}, 'worker.txt', 'gateway test', 'code', 'ok');"],
+        env=env, text=True, capture_output=True, check=True,
+    )
+    assert allowed.stdout.strip().endswith(tuple("0123456789"))
+
+
 def test_delegated_task_reports_progress_to_user_conversation(db, sandbox):
     identities = ids(db)
     conductor = identities["Conductor"]
