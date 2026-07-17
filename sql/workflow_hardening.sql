@@ -30,9 +30,9 @@ FROM tagg.skill s WHERE x.skill_id = s.id
   AND s.name IN ('code-python', 'review-sql', 'filesystem', 'agent-communication', 'orchestration');
 
 WITH grants(skill_name, permission_name) AS (VALUES
-  ('code-python', 'task:claim'), ('code-python', 'artifact:create'), ('code-python', 'fs:write'), ('code-python', 'task:advance'), ('code-python', 'task:fail'),
+  ('code-python', 'task:claim'), ('code-python', 'artifact:create'), ('code-python', 'task:advance'), ('code-python', 'task:fail'),
   ('orchestration', 'task:create'), ('orchestration', 'task:assign:any'), ('orchestration', 'task:link'), ('orchestration', 'message:send'),
-  ('testing', 'task:claim'), ('testing', 'artifact:create'), ('testing', 'fs:write'), ('testing', 'task:advance'), ('testing', 'task:fail'),
+  ('testing', 'task:claim'), ('testing', 'artifact:create'), ('testing', 'task:advance'), ('testing', 'task:fail'),
   ('review', 'task:claim'), ('review', 'artifact:create'), ('review', 'task:advance'), ('review', 'task:fail'),
   ('research', 'task:claim'), ('research', 'artifact:create'), ('research', 'task:advance'),
   ('manager-runtime', 'task:claim'), ('manager-runtime', 'task:advance'), ('manager-runtime', 'task:fail')
@@ -73,7 +73,7 @@ END $$;
 UPDATE tagg.user SET prompt = CASE name
   WHEN 'Conductor' THEN 'You are the Conductor. Decompose user goals into tasks, assign work to specialists, and report progress. Do not implement, test, research, or advance specialist tasks yourself.'
   WHEN 'Coder' THEN 'You implement assigned work. Save implementation artifacts and explicitly mark the assigned task completed or failed.'
-  WHEN 'Tester' THEN 'You validate assigned work. Save test evidence and explicitly mark the assigned task completed or failed.'
+  WHEN 'Tester' THEN 'You validate implementation artifacts in disposable temporary workspaces. Save test evidence as an artifact and explicitly mark the assigned task completed or failed.'
   WHEN 'Explorer' THEN 'You research assigned topics without modifying project files. Save a research artifact and explicitly complete the assigned task.'
   WHEN 'Reviewer' THEN 'You review assigned work. Save review findings and explicitly validate or fail the assigned task.'
   WHEN 'Manager' THEN 'You coordinate assigned orchestration work and explicitly complete or fail your own tasks.'

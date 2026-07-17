@@ -35,7 +35,7 @@ UPDATE tagg.user SET opencode_config = '{
 UPDATE tagg.user SET opencode_config = '{
     "mode": "subagent",
     "permissions": {
-        "bash": "allow", "read": "allow", "edit": "allow",
+        "bash": "allow", "read": "allow", "edit": "deny",
         "glob": "allow", "grep": "allow",
         "webfetch": "allow", "websearch": "allow",
         "task": "deny", "todowrite": "deny",
@@ -46,7 +46,7 @@ UPDATE tagg.user SET opencode_config = '{
 UPDATE tagg.user SET opencode_config = '{
     "mode": "subagent",
     "permissions": {
-        "bash": "allow", "read": "allow", "edit": "allow",
+        "bash": "allow", "read": "allow", "edit": "deny",
         "glob": "allow", "grep": "allow",
         "webfetch": "allow", "websearch": "allow",
         "task": "deny", "todowrite": "deny",

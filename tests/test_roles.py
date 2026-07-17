@@ -1,7 +1,7 @@
 EXPECTED = {
     "Conductor": {"message:send", "task:advance", "task:assign:any", "task:claim", "task:create", "task:fail", "task:link"},
-    "Coder": {"artifact:create", "fs:write", "task:advance", "task:claim", "task:fail"},
-    "Tester": {"artifact:create", "fs:write", "task:advance", "task:claim", "task:fail"},
+    "Coder": {"artifact:create", "task:advance", "task:claim", "task:fail"},
+    "Tester": {"artifact:create", "task:advance", "task:claim", "task:fail"},
     "Explorer": {"artifact:create", "task:advance", "task:claim"},
     "Reviewer": {"artifact:create", "task:advance", "task:claim", "task:fail"},
     "Manager": {"message:send", "task:advance", "task:assign:any", "task:claim", "task:create", "task:fail", "task:link"},

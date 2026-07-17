@@ -49,6 +49,7 @@ def sandbox(db):
             (project_id,),
         )
         db.execute("DELETE FROM tagg.message_agent_task_crosswalk WHERE agent_task_id IN (SELECT id FROM tagg.agent_task WHERE project_id = %s)", (project_id,))
+        db.execute("DELETE FROM tagg.artifact WHERE agent_task_id IN (SELECT id FROM tagg.agent_task WHERE project_id = %s)", (project_id,))
         db.execute("DELETE FROM tagg.message WHERE conversation_id IN (SELECT id FROM tagg.conversation WHERE project_id = %s)", (project_id,))
         db.execute("DELETE FROM tagg.agent_task WHERE project_id = %s", (project_id,))
         db.execute("DELETE FROM tagg.conversation WHERE project_id = %s", (project_id,))

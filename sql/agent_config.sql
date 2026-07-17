@@ -134,8 +134,8 @@ COMMENT ON TRIGGER set_timestamp ON tagg.skill_user_crosswalk IS
 -- ------------------------------------------------------------------------
 INSERT INTO tagg.skill (name, descr, content) VALUES
     ('code-python',
-     'Python development capabilities including PEP8, type hints, testing.',
-     'You are a Python developer. Follow PEP8 style guidelines. Write type hints for all function signatures. Include docstrings in Google style. Prefer standard library over external dependencies unless the task specifies otherwise. Write tests using pytest.'),
+     'Python implementation artifacts including PEP8, type hints, and tests.',
+     'You are a Python developer. Produce complete implementation output as an artifact. Follow PEP8 style guidelines, write type hints for all function signatures, include Google-style docstrings, and prefer the standard library unless the task specifies otherwise. Do not modify files in the project workspace.'),
     ('review-sql',
      'SQL query review for performance, security, and correctness.',
      'When reviewing SQL: check for missing WHERE clauses that could cause full table scans. Verify JOIN columns are indexed. Watch for SQL injection vectors in dynamic queries. Confirm EXPLAIN ANALYZE output is acceptable. Flag any N+1 query patterns.'),

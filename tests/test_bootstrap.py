@@ -39,3 +39,39 @@ def test_conductor_workflow_policy_is_database_backed(db):
     assert "conductor-workflow" in skills
     assert "## Skill: conductor-workflow" in rendered
     assert "create_task.sh" in rendered
+
+
+def test_coder_is_restricted_to_artifact_output(db):
+    coder_id = db.execute("SELECT id FROM tagg.user WHERE name = 'Coder'").fetchone()[0]
+    rendered = db.execute("SELECT tagg.render_agent_config(%s)", (coder_id,)).fetchone()[0]
+    permissions = {
+        row[0]
+        for row in db.execute(
+            """SELECT p.name FROM tagg.skill_user_crosswalk x
+               JOIN tagg.skill_permission_crosswalk sp ON sp.skill_id = x.skill_id
+               JOIN tagg.permission p ON p.id = sp.permission_id
+               WHERE x.user_id = %s AND x.is_active AND sp.is_active""",
+            (coder_id,),
+        )
+    }
+    assert "edit: deny" in rendered
+    assert "create_artifact.sh" in rendered
+    assert "fs:write" not in permissions
+
+
+def test_tester_uses_disposable_artifact_workspaces(db):
+    tester_id = db.execute("SELECT id FROM tagg.user WHERE name = 'Tester'").fetchone()[0]
+    rendered = db.execute("SELECT tagg.render_agent_config(%s)", (tester_id,)).fetchone()[0]
+    permissions = {
+        row[0]
+        for row in db.execute(
+            """SELECT p.name FROM tagg.skill_user_crosswalk x
+               JOIN tagg.skill_permission_crosswalk sp ON sp.skill_id = x.skill_id
+               JOIN tagg.permission p ON p.id = sp.permission_id
+               WHERE x.user_id = %s AND x.is_active AND sp.is_active""",
+            (tester_id,),
+        )
+    }
+    assert "edit: deny" in rendered
+    assert "test_artifact.sh" in rendered
+    assert "fs:write" not in permissions
