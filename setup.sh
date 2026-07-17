@@ -78,30 +78,9 @@ fi
 # 3. Run SQL migrations
 # ------------------------------------------------------------------
 echo "--- Step 3: SQL migrations ---"
-SQL_FILES=(
-    "sql/000_core.sql"
-    "sql/agent_config.sql"
-    "sql/permissions.sql"
-    "sql/workflow.sql"
-    "sql/regress_workflow.sql"
-    "sql/role_agents.sql"
-    "sql/agent_config_db.sql"
-    "sql/conversation_gateway.sql"
-    "sql/hardening.sql"
-    "sql/workflow_hardening.sql"
-    "sql/generic_entities.sql"
-    "sql/documentation_comments.sql"
-)
-
-for f in "${SQL_FILES[@]}"; do
-    if [ -f "$f" ]; then
-        echo "  Running $f ..."
-        psql -v ON_ERROR_STOP=1 -f "$f"
-        pass "Applied $f"
-    else
-        warn "SQL file not found: $f (skipping)"
-    fi
-done
+echo "  Running sql/bootstrap_manifest.sql ..."
+psql -v ON_ERROR_STOP=1 -f sql/bootstrap_manifest.sql
+pass "Applied canonical bootstrap manifest"
 
 # ------------------------------------------------------------------
 # 4. Verify functions

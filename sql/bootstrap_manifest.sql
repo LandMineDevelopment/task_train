@@ -1,0 +1,19 @@
+\set ON_ERROR_STOP on
+\ir 000_core.sql
+\ir agent_config.sql
+\ir permissions.sql
+\ir workflow.sql
+\ir regress_workflow.sql
+\ir role_agents.sql
+\ir agent_config_db.sql
+\ir conversation_gateway.sql
+\ir browser_chat_workflow.sql
+\ir hardening.sql
+\ir workflow_hardening.sql
+\ir conductor_workflow.sql
+\ir conversation_progress.sql
+\ir artifact_only_workers.sql
+\ir audit_gateway.sql
+\ir run_scoped_gateway.sql
+\ir generic_entities.sql
+\ir documentation_comments.sql

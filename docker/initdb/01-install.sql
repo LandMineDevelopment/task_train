@@ -1,21 +1,4 @@
 \set ON_ERROR_STOP on
-\i /workspace/sql/000_core.sql
-\i /workspace/sql/agent_config.sql
-\i /workspace/sql/permissions.sql
-\i /workspace/sql/workflow.sql
-\i /workspace/sql/regress_workflow.sql
-\i /workspace/sql/role_agents.sql
-\i /workspace/sql/agent_config_db.sql
-\i /workspace/sql/conversation_gateway.sql
-\i /workspace/sql/browser_chat_workflow.sql
-\i /workspace/sql/hardening.sql
-\i /workspace/sql/workflow_hardening.sql
-\i /workspace/sql/conductor_workflow.sql
-\i /workspace/sql/conversation_progress.sql
-\i /workspace/sql/artifact_only_workers.sql
-\i /workspace/sql/audit_gateway.sql
+\i /workspace/sql/bootstrap_manifest.sql
 \getenv worker_password POSTGRES_PASSWORD
-\i /workspace/sql/run_scoped_gateway.sql
 \i /workspace/sql/worker_role.sql
-\i /workspace/sql/generic_entities.sql
-\i /workspace/sql/documentation_comments.sql
