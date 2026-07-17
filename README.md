@@ -42,29 +42,68 @@ Show the current connection details for DBeaver:
 bash tools/show_connection.sh
 ```
 
-Changing only the host port is safe after first startup. PostgreSQL applies the database name, user, and password only when its data volume is initialized. To change those three values later, run `docker compose down -v`, re-run `./configure.sh`, then start Compose again. Docker credentials are development-only and must not be used outside a local machine.
-
-The database container initializes the supported bootstrap migration sequence on its first start. To discard its local data and initialize again:
-
-```bash
-docker compose down -v
-docker compose up -d
-```
+Changing only the host port is safe after first startup. PostgreSQL applies the database name, user, and password only when its data volume is initialized. Changing those values requires the full destructive reset described below. Docker credentials are development-only and must not be used outside a local machine.
 
 Authenticate OpenCode inside the application container, then start the durable Conductor chat:
 
 ```bash
-docker compose exec app opencode auth login
+bash tools/opencode_auth.sh
 docker compose exec app bash start.sh
 ```
 
 OpenCode configuration is stored in named Docker volumes, so authentication survives application-container replacement. `start.sh` opens the durable Conductor chat; type `/exit` to stop it.
 
-To stop the environment without removing database or OpenCode state:
+## Daily Use And Recovery
+
+After the first setup, start the application without rebuilding images:
+
+```bash
+docker compose up -d
+```
+
+Open the browser at the port in `.env` (`http://localhost:3000` by default). Check service status and follow logs when diagnosing startup or workflow issues:
+
+```bash
+docker compose ps
+docker compose logs -f web supervisor
+```
+
+Stop the application without removing the database, conversations, artifacts, or OpenCode credentials:
 
 ```bash
 docker compose down
 ```
+
+After pulling an update, rebuild the application images and apply idempotent database migrations while preserving local data and OpenCode credentials:
+
+```bash
+git pull --ff-only
+docker compose up -d --build
+```
+
+Verify the provider login at any time:
+
+```bash
+docker compose exec -T --user app -e HOME=/home/app app opencode auth list
+```
+
+### Reset Local Data
+
+Back up the local database before a destructive reset:
+
+```bash
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > task-train-backup.sql
+```
+
+To completely reset Task Train to a blank local installation:
+
+```bash
+docker compose down -v
+bash tools/setup_docker.sh
+bash tools/opencode_auth.sh
+```
+
+`docker compose down -v` removes all named volumes. This permanently deletes the PostgreSQL database, conversations, artifacts, agent-run history, and stored OpenCode credentials. It does not modify tracked repository files. Use `docker compose down` instead when you only want to stop the application.
 
 ## Testing
 
