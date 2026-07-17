@@ -23,6 +23,10 @@ class NewMessage(BaseModel):
     message: str
 
 
+class RenameConversation(BaseModel):
+    title: str
+
+
 @contextmanager
 def database():
     connection = psycopg.connect(
@@ -195,6 +199,29 @@ def create_message(conversation_id: int, payload: NewMessage):
         )
         connection.commit()
     return {"task_id": task["id"], "status": "queued"}
+
+
+@app.patch("/api/conversations/{conversation_id}")
+def rename_conversation(conversation_id: int, payload: RenameConversation):
+    title = payload.title.strip()
+    if not title or len(title) > 200:
+        raise HTTPException(status_code=422, detail="Title must contain between 1 and 200 characters")
+    with database() as connection:
+        _, user_id, conductor_id = chat_participants(connection)
+        conversation = connection.execute(
+            """
+            UPDATE tagg.conversation
+            SET title = %s, updated = CURRENT_TIMESTAMP
+            WHERE id = %s AND is_active AND kind = 'user_conductor'
+              AND owner_user_id = %s AND conductor_user_id = %s
+            RETURNING id, title
+            """,
+            (title, conversation_id, user_id, conductor_id),
+        ).fetchone()
+        if conversation is None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        connection.commit()
+    return {"conversation": conversation}
 
 
 @app.get("/")
