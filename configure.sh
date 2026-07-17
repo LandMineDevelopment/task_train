@@ -8,6 +8,7 @@ WEB_PORT="${TASK_TRAIN_WEB_PORT:-3000}"
 DATABASE="${POSTGRES_DB:-task_train}"
 USERNAME="${POSTGRES_USER:-task_train}"
 PASSWORD="${POSTGRES_PASSWORD:-}"
+WORKER_PASSWORD="${POSTGRES_WORKER_PASSWORD:-}"
 PROJECT="${TASK_TRAIN_COMPOSE_PROJECT:-task_train}"
 INTERACTIVE=true
 OLD_DATABASE=""
@@ -17,6 +18,14 @@ OLD_PROJECT=""
 
 usage() {
     printf 'Usage: %s [--port PORT] [--web-port PORT] [--database NAME] [--user NAME] [--password PASSWORD] [--project NAME] [--non-interactive]\n' "$0"
+}
+
+generate_password() {
+    local value=""
+    while (( ${#value} < 32 )); do
+        value+="$(LC_ALL=C tr -dc 'A-Za-z0-9_@%+=.,/-' </dev/urandom | head -c 64 || true)"
+    done
+    printf '%s' "${value:0:32}"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -41,6 +50,7 @@ if [[ -f "$ENV_FILE" ]]; then
             POSTGRES_DB) OLD_DATABASE="$value"; [[ "$DATABASE" == "task_train" ]] && DATABASE="$value" ;;
             POSTGRES_USER) OLD_USERNAME="$value"; [[ "$USERNAME" == "task_train" ]] && USERNAME="$value" ;;
             POSTGRES_PASSWORD) OLD_PASSWORD="$value"; [[ -z "$PASSWORD" ]] && PASSWORD="$value" ;;
+            POSTGRES_WORKER_PASSWORD) [[ -z "$WORKER_PASSWORD" ]] && WORKER_PASSWORD="$value" ;;
             TASK_TRAIN_COMPOSE_PROJECT) OLD_PROJECT="$value"; [[ "$PROJECT" == "task_train" ]] && PROJECT="$value" ;;
         esac
     done < "$ENV_FILE"
@@ -55,8 +65,11 @@ if [[ "$INTERACTIVE" == true ]]; then
 fi
 
 if [[ -z "$PASSWORD" ]]; then
-    PASSWORD="$(tr -dc 'A-Za-z0-9_@%+=.,/-' </dev/urandom | fold -w 32 | head -n 1)"
+    PASSWORD="$(generate_password)"
     printf 'Generated a database password. It is stored only in %s.\n' "$ENV_FILE"
+fi
+if [[ -z "$WORKER_PASSWORD" ]]; then
+    WORKER_PASSWORD="$(generate_password)"
 fi
 
 [[ "$PORT" =~ ^[0-9]+$ ]] && (( PORT >= 1 && PORT <= 65535 )) || { printf 'Port must be between 1 and 65535.\n' >&2; exit 1; }
@@ -82,6 +95,7 @@ umask 077
     printf 'POSTGRES_DB=%s\n' "$DATABASE"
     printf 'POSTGRES_USER=%s\n' "$USERNAME"
     printf 'POSTGRES_PASSWORD=%s\n' "$PASSWORD"
+    printf 'POSTGRES_WORKER_PASSWORD=%s\n' "$WORKER_PASSWORD"
 } > "$ENV_FILE"
 
 printf 'Wrote %s. Start with: docker compose up -d --build\n' "$ENV_FILE"

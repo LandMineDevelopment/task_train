@@ -14,6 +14,7 @@ Usage:
 
 import json
 import os
+import pwd
 import secrets
 import signal
 import subprocess
@@ -106,6 +107,16 @@ def build_agent_map(agents: list[dict], project_root: str) -> dict[int, dict]:
                 "max_concurrent": a.get("max_concurrent", 1),
             }
     return m
+
+
+def worker_identity(restricted: bool):
+    if not restricted or os.geteuid() != 0:
+        return None
+    account = pwd.getpwnam("app")
+    def drop_privileges():
+        os.setgid(account.pw_gid)
+        os.setuid(account.pw_uid)
+    return drop_privileges
 
 
 def mark_timed_out(db_conf: dict, timeout_secs: int):
@@ -390,6 +401,7 @@ def main():
                     env=env,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
+                    preexec_fn=worker_identity("worker_user" in db_conf),
                 )
                 processes[proc.pid] = {
                     "proc": proc,
