@@ -23,9 +23,8 @@ type_q="${TYPE//\'/\'\'}"
 body_q="${BODY//\'/\'\'}"
 
 psql --no-psqlrc -A -t 2>/dev/null <<SQL
-SELECT tagg.set_agent_run_context('$AGENT_RUN_TOKEN');
 SELECT json_build_object(
   'success', true,
-  'artifact_id', tagg.artifact_add($TASK_ID, '$name_q', '$descr_q', '$type_q', '$body_q')
+  'artifact_id', tagg.artifact_add_for_run('$AGENT_RUN_TOKEN', $TASK_ID, '$name_q', '$descr_q', '$type_q', '$body_q')
 )::text;
 SQL

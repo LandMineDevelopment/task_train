@@ -14,9 +14,8 @@ AGENT_ID="${2:?}"
 : "${AGENT_RUN_TOKEN:?AGENT_RUN_TOKEN required}"
 
 psql --no-psqlrc -A -t 2>/dev/null <<SQL
-SELECT tagg.set_agent_run_context('$AGENT_RUN_TOKEN');
 SELECT json_build_object(
   'success', true,
-  'new_status_id', tagg.advance_workflow($TASK_ID)
+  'new_status_id', tagg.advance_task_for_run('$AGENT_RUN_TOKEN', $TASK_ID)
 )::text;
 SQL

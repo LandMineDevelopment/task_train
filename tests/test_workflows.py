@@ -82,14 +82,16 @@ def test_worker_role_cannot_mutate_tables_but_can_use_gateway(db, sandbox):
     task_id = create_task(db, sandbox["project_id"], coder, "restricted worker pytest task")
     token = f"worker-{sandbox['suffix']}-abcdefghijklmnopqrstuvwxyz"
     start_run(db, task_id, coder, token)
-    env = os.environ | {"PGUSER": "task_train_worker", "AGENT_RUN_TOKEN": token}
+    env = os.environ | {
+        "PGUSER": "task_train_worker", "PGPASSWORD": os.environ["PGWORKER_PASSWORD"], "AGENT_RUN_TOKEN": token,
+    }
     denied = subprocess.run(
         ["psql", "--no-psqlrc", "-c", "UPDATE tagg.agent_task SET task_status_id = 4 WHERE id = 0"],
         env=env, text=True, capture_output=True,
     )
     assert denied.returncode != 0
     allowed = subprocess.run(
-        ["psql", "--no-psqlrc", "-At", "-c", f"SELECT tagg.set_agent_run_context('{token}'); SELECT tagg.artifact_add({task_id}, 'worker.txt', 'gateway test', 'code', 'ok');"],
+        ["psql", "--no-psqlrc", "-At", "-c", f"SELECT tagg.artifact_add_for_run('{token}', {task_id}, 'worker.txt', 'gateway test', 'code', 'ok');"],
         env=env, text=True, capture_output=True, check=True,
     )
     assert allowed.stdout.strip().endswith(tuple("0123456789"))
