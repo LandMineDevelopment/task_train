@@ -97,6 +97,28 @@ def test_worker_role_cannot_mutate_tables_but_can_use_gateway(db, sandbox):
     assert allowed.stdout.strip().endswith(tuple("0123456789"))
 
 
+def test_expired_run_is_abandoned_and_task_requeued(db, sandbox):
+    coder = ids(db)["Coder"]
+    task_id = create_task(db, sandbox["project_id"], coder, "expired run pytest task")
+    token = f"expired-{sandbox['suffix']}-abcdefghijklmnopqrstuvwxyz"
+    run_id = start_run(db, task_id, coder, token)
+    db.execute("UPDATE tagg.agent_task SET task_status_id = 3 WHERE id = %s", (task_id,))
+    db.execute("UPDATE tagg.agent_run SET heartbeat_at = CURRENT_TIMESTAMP - interval '10 minutes' WHERE id = %s", (run_id,))
+    assert db.execute("SELECT tagg.recover_expired_runs(60)").fetchone()[0] == 1
+    assert db.execute("SELECT status FROM tagg.agent_run WHERE id = %s", (run_id,)).fetchone()[0] == "abandoned"
+    assert db.execute("SELECT task_status_id FROM tagg.agent_task WHERE id = %s", (task_id,)).fetchone()[0] == 1
+
+
+def test_clean_worker_exit_without_completion_requeues_task(db, sandbox):
+    coder = ids(db)["Coder"]
+    task_id = create_task(db, sandbox["project_id"], coder, "unfinished worker pytest task")
+    token = f"unfinished-{sandbox['suffix']}-abcdefghijklmnopqrstuvwxyz"
+    run_id = start_run(db, task_id, coder, token)
+    db.execute("UPDATE tagg.agent_task SET task_status_id = 3 WHERE id = %s", (task_id,))
+    db.execute("SELECT tagg.finish_agent_run(%s, 0, NULL)", (run_id,))
+    assert db.execute("SELECT task_status_id FROM tagg.agent_task WHERE id = %s", (task_id,)).fetchone()[0] == 1
+
+
 def test_delegated_task_reports_progress_to_user_conversation(db, sandbox):
     identities = ids(db)
     conductor = identities["Conductor"]

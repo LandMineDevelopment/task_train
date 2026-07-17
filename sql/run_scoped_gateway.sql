@@ -3,6 +3,69 @@ SET search_path TO tagg, pg_catalog, pg_temp;
 
 ALTER TABLE tagg.agent_run ADD COLUMN IF NOT EXISTS heartbeat_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
+CREATE OR REPLACE FUNCTION tagg.heartbeat_agent_run(p_token text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
+BEGIN
+    UPDATE tagg.agent_run SET heartbeat_at = CURRENT_TIMESTAMP
+    WHERE token_hash = md5(p_token) AND status = 'running' AND expires_at > CURRENT_TIMESTAMP;
+    RETURN FOUND;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION tagg.release_reserved_task(p_task_id bigint, p_reason text)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
+BEGIN
+    UPDATE tagg.agent_task SET task_status_id = 1, last_error = p_reason, updated = CURRENT_TIMESTAMP
+    WHERE id = p_task_id AND task_status_id = 2 AND is_active;
+    IF FOUND THEN PERFORM tagg.log_operation('agent_task', p_task_id, 'release_reservation'); END IF;
+    RETURN FOUND;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION tagg.recover_expired_runs(p_timeout_seconds integer)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
+DECLARE v_run record; v_count integer := 0;
+BEGIN
+    FOR v_run IN
+        UPDATE tagg.agent_run SET status = 'abandoned', finished_at = CURRENT_TIMESTAMP,
+            error_text = 'worker heartbeat expired'
+        WHERE status = 'running' AND heartbeat_at < CURRENT_TIMESTAMP - make_interval(secs => p_timeout_seconds)
+        RETURNING id, task_id
+    LOOP
+        UPDATE tagg.agent_task task SET attempt_count = attempt_count + 1,
+            last_error = 'worker heartbeat expired', failed_at = CASE WHEN attempt_count + 1 >= max_attempts THEN CURRENT_TIMESTAMP ELSE NULL END,
+            task_status_id = CASE WHEN attempt_count + 1 >= max_attempts THEN 7 ELSE 1 END,
+            updated = CURRENT_TIMESTAMP
+        WHERE task.id = v_run.task_id AND task.task_status_id IN (2, 3)
+          AND NOT EXISTS (SELECT 1 FROM tagg.agent_run active WHERE active.task_id = task.id AND active.status = 'running');
+        PERFORM tagg.log_operation('agent_run', v_run.id, 'abandon');
+        PERFORM tagg.log_operation('agent_task', v_run.task_id, 'recover_expired_run');
+        v_count := v_count + 1;
+    END LOOP;
+    RETURN v_count;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION tagg.finish_agent_run(p_run bigint, p_exit integer, p_error text DEFAULT NULL)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
+DECLARE v_run tagg.agent_run%ROWTYPE; v_error text;
+BEGIN
+    SELECT * INTO v_run FROM tagg.agent_run WHERE id = p_run FOR UPDATE;
+    IF NOT FOUND OR v_run.status <> 'running' THEN RETURN; END IF;
+    UPDATE tagg.agent_run SET finished_at = CURRENT_TIMESTAMP, exit_code = p_exit,
+        error_text = p_error, status = CASE WHEN p_exit = 0 THEN 'completed' ELSE 'failed' END WHERE id = p_run;
+    IF p_exit <> 0 OR EXISTS (SELECT 1 FROM tagg.agent_task WHERE id = v_run.task_id AND task_status_id IN (2, 3)) THEN
+        v_error := COALESCE(NULLIF(p_error, ''), 'worker exited without completing its task');
+        UPDATE tagg.agent_task SET attempt_count = attempt_count + 1, last_error = v_error,
+            failed_at = CASE WHEN attempt_count + 1 >= max_attempts THEN CURRENT_TIMESTAMP ELSE NULL END,
+            task_status_id = CASE WHEN attempt_count + 1 >= max_attempts THEN 7 ELSE 1 END,
+            updated = CURRENT_TIMESTAMP
+        WHERE id = v_run.task_id AND task_status_id IN (2, 3);
+    END IF;
+    PERFORM tagg.log_operation('agent_run', p_run, 'finish');
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION tagg.authorize_run(p_token text, p_task_id bigint, p_permission text)
 RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
 DECLARE v_agent_id bigint;
@@ -107,5 +170,4 @@ END;
 $function$;
 
 REVOKE EXECUTE ON FUNCTION tagg.authorize_run(text,bigint,text), tagg.set_run_audit_context(text), tagg.claim_task_for_run(text,bigint), tagg.artifact_add_for_run(text,bigint,varchar,varchar,varchar,text), tagg.advance_task_for_run(text,bigint), tagg.fail_task_for_run(text,bigint), tagg.create_task_for_run(text,bigint,bigint,text,text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION tagg.authorize_run(text,bigint,text), tagg.set_run_audit_context(text), tagg.claim_task_for_run(text,bigint), tagg.artifact_add_for_run(text,bigint,varchar,varchar,varchar,text), tagg.advance_task_for_run(text,bigint), tagg.fail_task_for_run(text,bigint), tagg.create_task_for_run(text,bigint,bigint,text,text) TO task_train_worker;
 RESET search_path;

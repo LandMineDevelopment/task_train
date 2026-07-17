@@ -30,7 +30,7 @@ psql --no-psqlrc -v ON_ERROR_STOP=1 -f /workspace/sql/artifact_only_workers.sql 
 psql --no-psqlrc -v ON_ERROR_STOP=1 -f /workspace/sql/audit_gateway.sql >/dev/null
 psql --no-psqlrc -v ON_ERROR_STOP=1 -f /workspace/sql/run_scoped_gateway.sql >/dev/null
 psql --no-psqlrc -v ON_ERROR_STOP=1 -v worker_password="$PGWORKER_PASSWORD" -f /workspace/sql/worker_role.sql >/dev/null
-if [[ "$1" == "python3" && "$2" == "-u" && "$3" == "supervisor/db_supervisor.py" ]]; then
+if [[ "${1:-}" == "python3" && "${2:-}" == "-u" && "${3:-}" == "supervisor/db_supervisor.py" ]]; then
     exec "$@"
 fi
 exec runuser -u app -- "$@"

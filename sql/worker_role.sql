@@ -16,3 +16,4 @@ GRANT EXECUTE ON FUNCTION tagg.claim_task_for_run(text, bigint),
     tagg.append_conversation_message(bigint, bigint, bigint, text, text, text, jsonb),
     tagg.get_pending_tasks(integer)
 TO task_train_worker;
+GRANT EXECUTE ON FUNCTION tagg.heartbeat_agent_run(text) TO task_train_worker;

@@ -14,6 +14,12 @@ CONVERSATION_ID="${CONVERSATION_ID:?CONVERSATION_ID required}"
 AGENT_RUN_TOKEN="${AGENT_RUN_TOKEN:?AGENT_RUN_TOKEN required}"
 export AGENT_RUN_TOKEN
 
+heartbeat() { bash tools/heartbeat_run.sh >/dev/null 2>&1 || true; }
+heartbeat
+(while sleep 30; do heartbeat; done) &
+HEARTBEAT_PID=$!
+trap 'kill "$HEARTBEAT_PID" 2>/dev/null || true' EXIT HUP INT TERM
+
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$PROJECT_ROOT"
 

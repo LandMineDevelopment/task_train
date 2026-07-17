@@ -120,8 +120,13 @@ def worker_identity(restricted: bool):
 
 
 def mark_timed_out(db_conf: dict, timeout_secs: int):
-    """Release stale reserved or in-progress tasks back to pending."""
-    psql_query(f"SELECT tagg.recover_stalled_tasks({timeout_secs})", db_conf)
+    """Abandon expired runs and requeue only their eligible tasks."""
+    psql_query(f"SELECT tagg.recover_expired_runs({timeout_secs})", db_conf)
+
+
+def release_reservation(task_id: int, reason: str, db_conf: dict):
+    safe_reason = reason.replace("'", "''")
+    psql_query(f"SELECT tagg.release_reserved_task({task_id}, '{safe_reason}')", db_conf)
 
 
 def reserve_task(task_id: int, db_conf: dict) -> bool:
@@ -351,6 +356,7 @@ def main():
                 details = get_task_details(task_id, db_conf)
                 if details is None:
                     print(f"  [spawn] task={task_id} skipped: details unavailable")
+                    release_reservation(task_id, "task details unavailable", db_conf)
                     continue
 
                 if details["conversation_id"] is not None:
@@ -373,13 +379,15 @@ def main():
                     )
 
                 if conv_id is None:
-                    print(f"  [spawn] WARNING: no conversation for task {task_id}, spawning without it")
-                    conv_id = "0"
+                    print(f"  [spawn] task={task_id} skipped: conversation unavailable")
+                    release_reservation(task_id, "conversation unavailable", db_conf)
+                    continue
 
                 try:
                     run_id, run_token = start_agent_run(task_id, uid, conv_id, db_conf)
                 except RuntimeError as exc:
                     print(f"  [spawn] {exc}", file=sys.stderr)
+                    release_reservation(task_id, "agent run creation failed", db_conf)
                     continue
 
                 env = os.environ.copy()
@@ -395,14 +403,16 @@ def main():
                 if "password" in db_conf:
                     env["PGPASSWORD"] = db_conf.get("worker_password", db_conf["password"])
 
-                proc = subprocess.Popen(
-                    [agent["command"]],
-                    cwd=project_root,
-                    env=env,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    preexec_fn=worker_identity("worker_user" in db_conf),
-                )
+                try:
+                    proc = subprocess.Popen(
+                        [agent["command"]], cwd=project_root, env=env,
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                        preexec_fn=worker_identity("worker_user" in db_conf),
+                    )
+                except OSError as exc:
+                    finish_agent_run(run_id, 1, str(exc).encode(), db_conf)
+                    print(f"  [spawn] task={task_id} failed: {exc}", file=sys.stderr)
+                    continue
                 processes[proc.pid] = {
                     "proc": proc,
                     "task_id": task_id,
@@ -444,6 +454,8 @@ def main():
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait()
+        _, stderr = proc.communicate()
+        finish_agent_run(info["run_id"], proc.returncode or 143, stderr, db_conf)
     print("[supervisor] all agents terminated. Goodbye.")
 
 
