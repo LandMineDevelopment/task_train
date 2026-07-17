@@ -110,7 +110,10 @@ function App() {
   const [draft, setDraft] = useState("");
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("task-train-sidebar-collapsed") === "true");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem("task-train-sidebar-collapsed");
+    return saved === null ? window.matchMedia("(max-width: 720px)").matches : saved === "true";
+  });
   const messagesRef = useRef<HTMLDivElement>(null);
   const scrolledConversation = useRef<number | null>(null);
   const lastMessageId = useRef<number | null>(null);
