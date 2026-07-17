@@ -107,19 +107,19 @@ bash tools/opencode_auth.sh
 
 ## Testing
 
-The default test suite uses real PostgreSQL and a fake worker; it does not call a model provider:
+The default suite runs against the Compose PostgreSQL service and uses fake workers; it never calls a model provider. Start the Docker environment first, then run:
 
 ```bash
 docker compose exec app bash tests/run.sh
 ```
 
-Run the full clean-install test, including a temporary Docker project and configuration validation, from the host:
+Run the clean-install suite from the host. It creates a separate Compose project and database volume, validates `configure.sh`, boots all services, exercises the browser API, then runs the database suite:
 
 ```bash
 tests/test_fresh_bootstrap.sh
 ```
 
-The test suite covers schema bootstrap, roles and permissions, run tokens, task reservation/claim/failure transitions, conversation ordering, generic tagging constraints, PostgreSQL notifications, shell tool JSON output, supervisor worker dispatch, and browser conversation/task/artifact API flows.
+Set `TEST_DB_PORT` or `TEST_WEB_PORT` if the defaults (`15432` and `13000`) are occupied. The test suite covers schema bootstrap, worker-role isolation, run-scoped reads and mutations, heartbeat recovery, task reservation/claim/failure transitions, conversation ordering, generic tagging constraints, PostgreSQL notifications, shell tool JSON output, supervisor dispatch, artifact workspace cleanup, and browser conversation/task/artifact API flows.
 
 ## Conversation Browser
 
@@ -190,7 +190,7 @@ The supervisor reserves a pending task before spawning a worker:
 pending (1) -> reserved (2) -> in_progress (3)
 ```
 
-`agent_run` records the spawned worker, its token hash, start/end time, exit code, and error. A nonzero worker exit requeues a task until `max_attempts` is reached, then moves it to `failed (7)`.
+`agent_run` records the spawned worker, its token hash, heartbeat, start/end time, exit code, and error. The supervisor reconciles expired heartbeats and nonzero or incomplete worker exits, requeuing a task until `max_attempts` is reached, then moving it to `failed (7)`.
 
 `failed (7)` and `cancelled (8)` are terminal exceptions rather than linear workflow steps. A worker may fail only its assigned reserved or in-progress task. Cancellation requires the dedicated `task:cancel` permission.
 
@@ -289,7 +289,7 @@ It renders generated agent files to `agents/` and `.opencode/agents/`. Both dire
 
 ## Migrations
 
-The bootstrap applies these files in order:
+Fresh installations apply the canonical `sql/bootstrap_manifest.sql` in this order:
 
 ```text
 000_core.sql
@@ -300,12 +300,19 @@ regress_workflow.sql
 role_agents.sql
 agent_config_db.sql
 conversation_gateway.sql
+browser_chat_workflow.sql
 hardening.sql
 workflow_hardening.sql
+conductor_workflow.sql
+conversation_progress.sql
+artifact_only_workers.sql
+audit_gateway.sql
+run_scoped_gateway.sql
 generic_entities.sql
+documentation_comments.sql
 ```
 
-`000_core.sql` provides the base schema required by the historical migrations. Bootstrap stops on the first SQL error. Migrations remain order-dependent and are intended for an empty database; Docker Compose is the recommended clean-install path.
+`000_core.sql` provides the base schema required by the historical migrations. Docker then provisions `task_train_worker` through `worker_role.sql`. On startup, application containers serialize idempotent runtime migrations with a PostgreSQL advisory lock. Bootstrap remains order-dependent and is intended for an empty database; Docker Compose is the recommended clean-install path.
 
 ## Data Model
 
@@ -330,7 +337,7 @@ Key existing tables:
 
 ## Agent Tools
 
-Task workers receive `TASK_ID`, `AGENT_USER_ID`, `CONVERSATION_ID`, `PROJECT_ROOT`, and `AGENT_RUN_TOKEN` from the supervisor.
+Task workers receive `TASK_ID`, `AGENT_USER_ID`, `CONVERSATION_ID`, `PROJECT_ROOT`, and `AGENT_RUN_TOKEN` from the supervisor. Docker workers run as the unprivileged `app` OS user and connect as `task_train_worker`, using a separate password generated in `.env`.
 
 Run-token-scoped task tools include:
 
@@ -341,15 +348,19 @@ tools/create_artifact.sh
 tools/advance_task.sh
 tools/fail_task.sh
 tools/list_pending_tasks.sh
+tools/read_task.sh
+tools/read_conversation.sh
+tools/heartbeat_run.sh
 ```
 
-All listed tools require `AGENT_RUN_TOKEN`; `list_pending_tasks.sh` is read-only. Supplied agent ID arguments are retained for compatibility with existing prompts; the intended identity comes from the run token. `send_message.sh` routes messages through the centralized conversation append function.
+All listed tools require `AGENT_RUN_TOKEN`; the read/list tools are read-only. Supplied agent ID arguments are retained for compatibility with existing prompts; the intended identity and task scope come from the run token. `task_train_worker` has no direct table access and can execute only explicitly granted run-scoped gateway functions. `send_message.sh` routes messages through the centralized conversation append function.
 
 ## Security And Operational Limits
 
-- Run tokens are audit and routing controls, not complete isolation. If an agent can connect as the shared administrative PostgreSQL role, it can bypass application-level restrictions. Use a dedicated restricted DB role and non-trust authentication before treating permissions as enforcement.
-- Several gateway functions are `SECURITY DEFINER` and need tighter caller authorization and explicit grants before multi-user deployment.
-- Stale-task recovery uses timestamps, not a worker heartbeat. A long-running worker can be requeued and duplicated.
+- Docker workers use a restricted database role and separate password, but users with host/Docker access or the owner database credential can still bypass this boundary. Do not treat it as tenant isolation.
+- Browser requests act as the configured `local-user`; the UI has no login or session authentication. Keep it bound to localhost and do not expose it through a reverse proxy or public network.
+- Several gateway functions are `SECURITY DEFINER`; their explicit grants are reviewed for the worker role but broader multi-user authorization is not implemented.
+- Heartbeats reduce duplicate work after worker failure, but a stalled worker that continues heartbeating can still require operator intervention.
 - The supervisor can only auto-create configured agents when its database identity is authorized for `admin:agent`.
 - `regress_workflow()` remains a legacy function. Use `tools/fail_task.sh`, which calls the ownership-checked `fail_task()` function.
 

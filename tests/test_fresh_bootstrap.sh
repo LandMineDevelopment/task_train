@@ -5,6 +5,7 @@ PROJECT="task_train_fresh_${RANDOM}_${RANDOM}"
 PORT="${TEST_DB_PORT:-15432}"
 WEB_PORT="${TEST_WEB_PORT:-13000}"
 PASSWORD="test-password-abcdefghijklmnopqrstuvwxyz"
+WORKER_PASSWORD="test-worker-password-abcdefghijklmnopqrstuvwxyz"
 
 cleanup() {
     TASK_TRAIN_COMPOSE_PROJECT="$PROJECT" docker compose down -v --remove-orphans
@@ -17,11 +18,12 @@ python3 -m py_compile supervisor/db_supervisor.py
 
 TASK_TRAIN_COMPOSE_PROJECT="$PROJECT" TASK_TRAIN_DB_PORT="$PORT" TASK_TRAIN_WEB_PORT="$WEB_PORT" \
 POSTGRES_DB="task_train_test" POSTGRES_USER="task_train_test" POSTGRES_PASSWORD="$PASSWORD" \
+POSTGRES_WORKER_PASSWORD="$WORKER_PASSWORD" \
 docker compose up -d --build --wait
 
 TASK_TRAIN_COMPOSE_PROJECT="$PROJECT" docker compose exec -T app bash tools/smoke_test.sh
 TASK_TRAIN_COMPOSE_PROJECT="$PROJECT" docker compose stop supervisor
-TASK_TRAIN_COMPOSE_PROJECT="$PROJECT" docker compose exec -T web python3 -c "from urllib.request import Request, urlopen; import json; headers = {'Content-Type': 'application/json'}; assert json.load(urlopen('http://127.0.0.1:8000/api/health'))['status'] == 'ok'; conversations = json.load(urlopen('http://127.0.0.1:8000/api/conversations'))['conversations']; assert conversations; assert json.load(urlopen(f\"http://127.0.0.1:8000/api/conversations/{conversations[0]['id']}\"))['conversation']['id'] == conversations[0]['id']; request = Request('http://127.0.0.1:8000/api/conversations', data=b'{\"title\": \"Browser test\"}', headers=headers, method='POST'); created = json.load(urlopen(request)); request = Request(f\"http://127.0.0.1:8000/api/conversations/{created['conversation_id']}\", data=b'{\"title\": \"Renamed browser test\"}', headers=headers, method='PATCH'); assert json.load(urlopen(request))['conversation']['title'] == 'Renamed browser test'; request = Request(f\"http://127.0.0.1:8000/api/conversations/{created['conversation_id']}/messages\", data=b'{\"message\": \"Verify workflow dispatch.\"}', headers=headers, method='POST'); queued = json.load(urlopen(request)); assert queued['status'] == 'queued'; detail = json.load(urlopen(f\"http://127.0.0.1:8000/api/conversations/{created['conversation_id']}\")); assert detail['conversation']['title'] == 'Renamed browser test'; assert any(task['id'] == queued['task_id'] and task['artifacts'] == [] for task in detail['tasks']); assert 'Task Train' in urlopen('http://127.0.0.1:8000/').read().decode(); print(queued['task_id'])" > /tmp/browser-task-id
+TASK_TRAIN_COMPOSE_PROJECT="$PROJECT" docker compose exec -T -e BROWSER_API_BASE_URL=http://web:8000 app python3 tests/browser_api_smoke.py > /tmp/browser-task-id
 TASK_ID="$(tr -d '[:space:]' < /tmp/browser-task-id)"
 TASK_TRAIN_COMPOSE_PROJECT="$PROJECT" docker compose exec -T app psql --no-psqlrc -v ON_ERROR_STOP=1 -c "SELECT 1 FROM tagg.agent_task WHERE id = $TASK_ID AND task_status_id = 1 AND conversation_id IS NOT NULL AND workflow_id = (SELECT id FROM tagg.workflow WHERE name = 'quick');"
 TASK_TRAIN_COMPOSE_PROJECT="$PROJECT" docker compose exec -T app psql --no-psqlrc -v ON_ERROR_STOP=1 -c "SELECT 1 FROM tagg.operation_log l JOIN tagg.operation_type t ON t.id = l.operation_type_id WHERE l.object_type = 'agent_task' AND l.object_id = $TASK_ID AND t.name = 'browser_queue';"

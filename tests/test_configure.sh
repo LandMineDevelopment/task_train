@@ -15,6 +15,8 @@ grep -qx 'TASK_TRAIN_DB_PORT=15433' "$TMPDIR/.env"
 grep -qx 'TASK_TRAIN_WEB_PORT=13000' "$TMPDIR/.env"
 grep -qx 'POSTGRES_DB=test_db' "$TMPDIR/.env"
 grep -qx 'POSTGRES_USER=test_user' "$TMPDIR/.env"
+grep -q '^POSTGRES_WORKER_PASSWORD=.' "$TMPDIR/.env"
+test "$(cut -d= -f2- <<< "$(grep '^POSTGRES_PASSWORD=' "$TMPDIR/.env")")" != "$(cut -d= -f2- <<< "$(grep '^POSTGRES_WORKER_PASSWORD=' "$TMPDIR/.env")")"
 
 if (cd "$TMPDIR" && ./configure.sh --non-interactive --port invalid); then
     printf 'configure.sh accepted an invalid port\n' >&2

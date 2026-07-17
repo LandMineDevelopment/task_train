@@ -7,6 +7,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-task_train}
       POSTGRES_USER: ${POSTGRES_USER:-task_train}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run ./configure.sh before starting Docker Compose}
+      POSTGRES_WORKER_PASSWORD: ${POSTGRES_WORKER_PASSWORD:?Run ./configure.sh before starting Docker Compose}
     ports:
       - "${TASK_TRAIN_DB_PORT:-5433}:5432"
     volumes:
@@ -14,7 +15,7 @@ services:
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro
       - ./sql:/workspace/sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U task_train -d task_train"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 20
