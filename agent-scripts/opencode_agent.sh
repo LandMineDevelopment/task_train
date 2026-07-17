@@ -23,9 +23,7 @@ trap 'kill "$HEARTBEAT_PID" 2>/dev/null || true' EXIT HUP INT TERM
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$PROJECT_ROOT"
 
-# 1. Get agent name from DB
-AGENT_NAME=$(psql --no-psqlrc -A -t \
-  -c "SELECT name FROM tagg.user WHERE id = $AGENT_USER_ID" 2>/dev/null | tail -1)
+AGENT_NAME="${AGENT_NAME:?AGENT_NAME required}"
 
 echo "[agent] $AGENT_NAME (id=$AGENT_USER_ID) starting for task $TASK_ID, conversation $CONVERSATION_ID"
 
@@ -42,7 +40,7 @@ if [ "$SUCCESS" != "True" ]; then
   exit 0
 fi
 
-CONVERSATION_KIND=$(psql --no-psqlrc -A -t -c "SELECT kind FROM tagg.conversation WHERE id = $CONVERSATION_ID" 2>/dev/null | tr -d '[:space:]')
+CONVERSATION_KIND="${CONVERSATION_KIND:-agent_agent}"
 if [ "$AGENT_NAME" = "Conductor" ] && [ "$CONVERSATION_KIND" = "user_conductor" ]; then
   if RESPONSE=$(opencode run \
       --agent "$AGENT_NAME" \
@@ -60,9 +58,8 @@ if [ "$AGENT_NAME" = "Conductor" ] && [ "$CONVERSATION_KIND" = "user_conductor" 
     STATUS="failed"
   fi
   RESPONSE_SQL=$(printf "%s" "$RESPONSE" | sed "s/'/''/g")
-  RECIPIENT_ID=$(psql --no-psqlrc -A -t -c "SELECT owner_user_id FROM tagg.conversation WHERE id = $CONVERSATION_ID" 2>/dev/null | tr -d '[:space:]')
   psql --no-psqlrc -v ON_ERROR_STOP=1 -q -c \
-    "SELECT tagg.append_conversation_message($CONVERSATION_ID, $AGENT_USER_ID, $RECIPIENT_ID, '$RESPONSE_SQL', 'assistant', '$STATUS');" >/dev/null
+    "SELECT tagg.append_message_for_run('$AGENT_RUN_TOKEN', '$RESPONSE_SQL', '$STATUS');" >/dev/null
   if [ "$STATUS" = "complete" ]; then
     bash tools/advance_task.sh "$TASK_ID" "$AGENT_USER_ID" >/dev/null
   else

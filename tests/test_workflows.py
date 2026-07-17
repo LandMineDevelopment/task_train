@@ -90,6 +90,16 @@ def test_worker_role_cannot_mutate_tables_but_can_use_gateway(db, sandbox):
         env=env, text=True, capture_output=True,
     )
     assert denied.returncode != 0
+    denied_read = subprocess.run(
+        ["psql", "--no-psqlrc", "-c", f"SELECT * FROM tagg.agent_task WHERE id = {task_id}"],
+        env=env, text=True, capture_output=True,
+    )
+    assert denied_read.returncode != 0
+    scoped_read = subprocess.run(
+        ["psql", "--no-psqlrc", "-At", "-c", f"SELECT tagg.get_task_for_run('{token}', {task_id})"],
+        env=env, text=True, capture_output=True, check=True,
+    )
+    assert f'"id": {task_id}' in scoped_read.stdout
     allowed = subprocess.run(
         ["psql", "--no-psqlrc", "-At", "-c", f"SELECT tagg.artifact_add_for_run('{token}', {task_id}, 'worker.txt', 'gateway test', 'code', 'ok');"],
         env=env, text=True, capture_output=True, check=True,

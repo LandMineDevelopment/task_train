@@ -7,13 +7,11 @@ export PGUSER="${PGUSER:-kasey}"
 export PGDATABASE="${PGDATABASE:-task_train}"
 
 # read_task.sh <task_id>
-# Returns task details as JSON. Read-only, no permission needed.
+# Returns the current run's task details as JSON.
 
 TASK_ID="${1:?usage: read_task.sh <task_id>}"
+: "${AGENT_RUN_TOKEN:?AGENT_RUN_TOKEN required}"
 
 psql --no-psqlrc -A -t <<SQL 2>/dev/null
-SELECT row_to_json(t)::text
-FROM (SELECT id, from_user_id, to_user_id, task, project_id, parent_id,
-             task_status_id, workflow_id, created, updated, is_active
-      FROM tagg.agent_task WHERE id = $TASK_ID) t;
+SELECT tagg.get_task_for_run('$AGENT_RUN_TOKEN', $TASK_ID)::text;
 SQL

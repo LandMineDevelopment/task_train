@@ -12,6 +12,41 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION tagg.get_task_for_run(p_token text, p_task_id bigint)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
+DECLARE v_task tagg.agent_task%ROWTYPE;
+BEGIN
+    PERFORM tagg.authorize_run(p_token, p_task_id, 'task:claim');
+    SELECT * INTO v_task FROM tagg.agent_task WHERE id = p_task_id;
+    RETURN to_jsonb(v_task);
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION tagg.get_conversation_for_run(p_token text, p_conversation_id bigint)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
+DECLARE v_task_id bigint;
+BEGIN
+    SELECT task_id INTO v_task_id FROM tagg.agent_run WHERE token_hash = md5(p_token) AND status = 'running' AND expires_at > CURRENT_TIMESTAMP AND conversation_id = p_conversation_id;
+    IF v_task_id IS NULL THEN RAISE EXCEPTION 'Conversation is not assigned to this run'; END IF;
+    RETURN COALESCE((SELECT jsonb_agg(to_jsonb(m) ORDER BY m.id) FROM tagg.message m WHERE m.conversation_id = p_conversation_id AND m.is_active), '[]'::jsonb);
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION tagg.append_message_for_run(p_token text, p_message text, p_status text DEFAULT 'complete')
+RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
+DECLARE v_run tagg.agent_run%ROWTYPE; v_owner bigint; v_message_id bigint;
+BEGIN
+    SELECT * INTO v_run FROM tagg.agent_run WHERE token_hash = md5(p_token) AND status = 'running' AND expires_at > CURRENT_TIMESTAMP;
+    IF NOT FOUND OR v_run.conversation_id IS NULL THEN RAISE EXCEPTION 'Run has no active conversation'; END IF;
+    SELECT owner_user_id INTO v_owner FROM tagg.conversation WHERE id = v_run.conversation_id AND is_active;
+    IF v_owner IS NULL THEN RAISE EXCEPTION 'Conversation is unavailable'; END IF;
+    v_message_id := tagg.append_conversation_message(v_run.conversation_id, v_run.agent_user_id, v_owner, p_message, 'assistant', p_status);
+    PERFORM tagg.set_run_audit_context(p_token);
+    PERFORM tagg.log_operation('message', v_message_id, 'run_append');
+    RETURN v_message_id;
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION tagg.release_reserved_task(p_task_id bigint, p_reason text)
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'tagg', 'pg_catalog', 'pg_temp' AS $function$
 BEGIN
@@ -169,5 +204,5 @@ BEGIN
 END;
 $function$;
 
-REVOKE EXECUTE ON FUNCTION tagg.authorize_run(text,bigint,text), tagg.set_run_audit_context(text), tagg.claim_task_for_run(text,bigint), tagg.artifact_add_for_run(text,bigint,varchar,varchar,varchar,text), tagg.advance_task_for_run(text,bigint), tagg.fail_task_for_run(text,bigint), tagg.create_task_for_run(text,bigint,bigint,text,text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION tagg.authorize_run(text,bigint,text), tagg.set_run_audit_context(text), tagg.claim_task_for_run(text,bigint), tagg.artifact_add_for_run(text,bigint,varchar,varchar,varchar,text), tagg.advance_task_for_run(text,bigint), tagg.fail_task_for_run(text,bigint), tagg.create_task_for_run(text,bigint,bigint,text,text), tagg.get_task_for_run(text,bigint), tagg.get_conversation_for_run(text,bigint), tagg.append_message_for_run(text,text,text) FROM PUBLIC;
 RESET search_path;

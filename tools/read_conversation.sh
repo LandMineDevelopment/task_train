@@ -10,12 +10,8 @@ export PGDATABASE="${PGDATABASE:-task_train}"
 # Returns all messages in a conversation as JSON array.
 
 CONV_ID="${1:?usage: read_conversation.sh <conversation_id>}"
+: "${AGENT_RUN_TOKEN:?AGENT_RUN_TOKEN required}"
 
 psql --no-psqlrc -A -t 2>/dev/null <<SQL
-SELECT json_agg(row_to_json(t) ORDER BY t.id)::text
-FROM (
-  SELECT id, message, from_user, to_user, original_theme_alignment, parent_id, created
-  FROM tagg.message
-  WHERE conversation_id = $CONV_ID AND is_active = true
-) t;
+SELECT tagg.get_conversation_for_run('$AGENT_RUN_TOKEN', $CONV_ID)::text;
 SQL
