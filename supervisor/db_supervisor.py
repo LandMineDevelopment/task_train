@@ -122,7 +122,7 @@ def mark_timed_out(db_conf: dict, timeout_secs: int):
 def reserve_task(task_id: int, db_conf: dict) -> bool:
     """Atomically reserve a pending task before a child process is spawned."""
     rows = psql_query(f"SELECT tagg.reserve_task({task_id})::text", db_conf)
-    return bool(rows and rows[0][0] == "t")
+    return bool(rows and rows[0][0].lower() == "true")
 
 
 def start_agent_run(task_id: int, agent_id: int, conversation_id: str, db_conf: dict) -> tuple[int, str]:
@@ -324,11 +324,11 @@ def main():
                 "ORDER BY id LIMIT 20",
                 db_conf,
             )
-
             for task_id_str, uid_str in rows:
                 task_id = int(task_id_str)
                 uid = int(uid_str)
                 if uid not in agent_map:
+                    print(f"  [scan] task={task_id} skipped: unknown agent={uid}")
                     continue
                 if len(processes) >= max_total:
                     break
@@ -336,13 +336,14 @@ def main():
                     continue
 
                 if not reserve_task(task_id, db_conf):
+                    print(f"  [scan] task={task_id} skipped: reservation lost")
                     continue
-
                 agent = agent_map[uid]
 
                 # Get task details and write instruction to conversation
                 details = get_task_details(task_id, db_conf)
                 if details is None:
+                    print(f"  [spawn] task={task_id} skipped: details unavailable")
                     continue
 
                 instruction = (
@@ -405,7 +406,9 @@ def main():
                 )
 
         try:
-            if next(listener.notifies(timeout=0.5), None) is not None:
+            notification = next(listener.notifies(timeout=0.5), None)
+            if notification is not None:
+                print(f"  [notify] task={notification.payload}")
                 scan_pending = True
         except Exception as exc:
             print(f"[supervisor] LISTEN connection failed: {exc}; reconnecting", file=sys.stderr)

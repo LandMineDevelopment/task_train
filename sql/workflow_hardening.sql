@@ -44,6 +44,7 @@ ON CONFLICT (skill_id, permission_id) DO UPDATE SET is_active = true;
 UPDATE tagg.skill_user_crosswalk x SET is_active = false
 FROM tagg.user u WHERE x.user_id = u.id AND u.name IN ('Conductor', 'Coder', 'Tester', 'Explorer', 'Reviewer', 'Manager');
 WITH assignments(user_name, skill_name) AS (VALUES
+  ('Admin-Agent', 'admin'),
   ('Conductor', 'orchestration'), ('Coder', 'code-python'), ('Tester', 'testing'),
   ('Explorer', 'research'), ('Reviewer', 'review'), ('Manager', 'orchestration'), ('Manager', 'manager-runtime')
 )

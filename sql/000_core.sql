@@ -52,4 +52,5 @@ CREATE OR REPLACE FUNCTION tagg.log_operation(p_object_type text,p_object_id big
 CREATE OR REPLACE FUNCTION tagg.log_error(p_operation text,p_message text,p_code text,p_details jsonb) RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN; END $$;
 CREATE OR REPLACE FUNCTION tagg.assert_valid_entity(p_table_name text) RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN; END $$;
 INSERT INTO tagg.user(name,descr,is_agent) VALUES ('local-user','Default local user',false);
+INSERT INTO tagg.user(name,descr,is_agent) VALUES ('Admin-Agent','Administrative configuration agent',true);
 INSERT INTO tagg.project(name,descr,created_by_id) VALUES ('default','Default local project',(SELECT id FROM tagg.user WHERE name='local-user'));

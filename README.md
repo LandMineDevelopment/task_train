@@ -58,6 +58,22 @@ To stop the environment without removing database or OpenCode state:
 docker compose down
 ```
 
+## Testing
+
+The default test suite uses real PostgreSQL and a fake worker; it does not call a model provider:
+
+```bash
+docker compose exec app bash tests/run.sh
+```
+
+Run the full clean-install test, including a temporary Docker project and configuration validation, from the host:
+
+```bash
+tests/test_fresh_bootstrap.sh
+```
+
+The test suite covers schema bootstrap, roles and permissions, run tokens, task reservation/claim/failure transitions, conversation ordering, generic tagging constraints, PostgreSQL notifications, shell tool JSON output, and supervisor worker dispatch.
+
 ## Native Install
 
 For an existing local PostgreSQL installation, run:
