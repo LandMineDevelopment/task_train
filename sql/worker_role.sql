@@ -3,6 +3,7 @@ SELECT format('CREATE ROLE task_train_worker LOGIN PASSWORD %L', :'worker_passwo
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'task_train_worker') \gexec
 ALTER ROLE task_train_worker LOGIN PASSWORD :'worker_password';
 GRANT USAGE ON SCHEMA tagg TO task_train_worker;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA tagg FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA tagg FROM task_train_worker;
 REVOKE EXECUTE ON FUNCTION tagg.set_agent_run_context(text), tagg.claim_task(bigint),
     tagg.artifact_add(bigint, varchar, varchar, varchar, text), tagg.advance_workflow(bigint), tagg.fail_task(bigint),
